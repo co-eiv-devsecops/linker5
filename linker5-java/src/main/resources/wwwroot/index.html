@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linker</title>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Linker</h1>
+
+    <p class="subtitle">
+        Convierte una URL larga en una URL corta.
+    </p>
+
+    <div class="card">
+
+        <input
+                id="url"
+                type="text"
+                placeholder="https://ejemplo.com">
+
+        <button id="shortenBtn">
+            Acortar URL
+        </button>
+
+    </div>
+
+    <div id="result" class="hidden">
+
+        <h3>URL corta</h3>
+
+        <input
+                id="shortUrl"
+                type="text"
+                readonly>
+
+        <button id="copyBtn">
+            Copiar
+        </button>
+
+    </div>
+
+    <p id="message"></p>
+
+</div>
+
+<script src="js/app.js"></script>
+
+</body>
+</html>

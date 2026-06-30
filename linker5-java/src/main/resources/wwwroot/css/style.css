@@ -1,0 +1,139 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+
+    font-family:Arial, Helvetica, sans-serif;
+
+    background:#f4f4f4;
+
+    height:100vh;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+}
+
+.container{
+
+    width:500px;
+
+    background:white;
+
+    border-radius:10px;
+
+    padding:35px;
+
+    box-shadow:0 10px 25px rgba(0,0,0,.15);
+
+}
+
+h1{
+
+    text-align:center;
+
+    margin-bottom:10px;
+
+    color:#2563eb;
+
+}
+
+.subtitle{
+
+    text-align:center;
+
+    color:#666;
+
+    margin-bottom:25px;
+
+}
+
+.card{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:15px;
+
+}
+
+input{
+
+    padding:14px;
+
+    font-size:16px;
+
+    border:1px solid #ccc;
+
+    border-radius:6px;
+
+}
+
+button{
+
+    padding:14px;
+
+    background:#2563eb;
+
+    color:white;
+
+    border:none;
+
+    border-radius:6px;
+
+    cursor:pointer;
+
+    font-size:16px;
+
+}
+
+button:hover{
+
+    background:#1d4ed8;
+
+}
+
+#result{
+
+    margin-top:30px;
+
+}
+
+#shortUrl{
+
+    margin-top:10px;
+
+    margin-bottom:10px;
+
+    width:100%;
+
+}
+
+#copyBtn{
+
+    width:100%;
+
+}
+
+.hidden{
+
+    display:none;
+
+}
+
+#message{
+
+    margin-top:20px;
+
+    text-align:center;
+
+    color:red;
+
+}
