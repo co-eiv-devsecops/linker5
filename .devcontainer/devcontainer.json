@@ -1,0 +1,40 @@
+{
+  "name": "Linker Dev",
+
+  // Base image already ships with JDK 21 (Temurin) and Git.
+  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
+
+  // Add Maven on top of the base image.
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "none",
+      "installMaven": "true",
+      "mavenVersion": "3.9.9"
+    }
+  },
+
+  // Linker listens on 8080; VS Code / Codespaces will forward it automatically.
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "Linker",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // Build the jar once the container is created so it is ready to run.
+  "postCreateCommand": "cd linker5-java && mvn -q clean package -DskipTests",
+
+  // Editor tooling installed inside the container (same for everyone).
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-maven"
+      ]
+    }
+  },
+
+  "remoteUser": "vscode"
+}
