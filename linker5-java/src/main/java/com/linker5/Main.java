@@ -19,10 +19,11 @@ import java.util.UUID;
 public class Main {
 
     private static final Gson GSON = new Gson();
+    private static final Linker LINKER = new Linker();
     private static Connection db;
 
     public static void main(String[] args) throws Exception {
-        db = DriverManager.getConnection("jdbc:sqlite:linker.db");
+        db = DriverManager.getConnection(LINKER.getDatabaseConnectionString());
         db.createStatement().execute("CREATE TABLE IF NOT EXISTS shorturl(id TEXT PRIMARY KEY, url TEXT NOT NULL)");
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
