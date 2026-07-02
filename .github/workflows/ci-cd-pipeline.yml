@@ -7,6 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
+  # ---------- Setup and Checkout ----------
   setup-and-checkout:
     runs-on: ubuntu-latest
     steps:
@@ -16,6 +17,7 @@ jobs:
       - name: MVNSetup
         run: echo "[Setup and Checkout] MVNSetup"
 
+  # ---------- Build ----------
   build:
     needs: setup-and-checkout
     runs-on: ubuntu-latest
@@ -23,6 +25,7 @@ jobs:
       - name: Build
         run: echo "[Build] Build"
 
+  # ---------- Continuous Integration Tests ----------
   continuous-integration-tests:
     needs: build
     runs-on: ubuntu-latest
@@ -33,53 +36,75 @@ jobs:
       - name: UnitTests
         run: echo "[Continuous Integration Tests] UnitTests"
 
-  static-code-analysis:
+  # ---------- Static Code Analysis (paralelo) ----------
+  dependency-scan:
     needs: continuous-integration-tests
     runs-on: ubuntu-latest
     steps:
       - name: DependencyScan
         run: echo "[Static Code Analysis] DependencyScan"
 
+  quality-scan:
+    needs: continuous-integration-tests
+    runs-on: ubuntu-latest
+    steps:
       - name: QualityScan
         run: echo "[Static Code Analysis] QualityScan"
 
+  security-scan:
+    needs: continuous-integration-tests
+    runs-on: ubuntu-latest
+    steps:
       - name: SecurityScan
         run: echo "[Static Code Analysis] SecurityScan"
 
+  # ---------- Deploy to QA ----------
   deploy-to-qa:
-    needs: static-code-analysis
+    needs: [dependency-scan, quality-scan, security-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to QA
         run: echo "[Deploy to QA] Deploy"
 
-  post-deployment-checks-qa:
+  # ---------- Post-Deployment Checks (QA) (paralelo) ----------
+  integration-test-qa:
     needs: deploy-to-qa
     runs-on: ubuntu-latest
     steps:
       - name: IntegrationTest
-        run: echo "[Post-Deployment Checks] IntegrationTest"
+        run: echo "[Post-Deployment Checks QA] IntegrationTest"
 
+  smoke-test-qa:
+    needs: deploy-to-qa
+    runs-on: ubuntu-latest
+    steps:
       - name: SmokeTest
-        run: echo "[Post-Deployment Checks] SmokeTest"
+        run: echo "[Post-Deployment Checks QA] SmokeTest"
 
-  functional-tests:
-    needs: post-deployment-checks-qa
+  # ---------- Functional Tests (paralelo) ----------
+  test-local:
+    needs: [integration-test-qa, smoke-test-qa]
     runs-on: ubuntu-latest
     steps:
       - name: TestLocal
         run: echo "[Functional Tests] TestLocal"
 
+  test-remote:
+    needs: [integration-test-qa, smoke-test-qa]
+    runs-on: ubuntu-latest
+    steps:
       - name: TestRemote
         run: echo "[Functional Tests] TestRemote"
 
+  # ---------- Dynamic Code Analysis ----------
   dynamic-code-analysis:
-    needs: functional-tests
+    needs: [test-local, test-remote]
     runs-on: ubuntu-latest
     steps:
       - name: QualityScan
         run: echo "[Dynamic Code Analysis] QualityScan"
 
+  # ---------- Deploy to Stage ----------
   deploy-to-stage:
     needs: dynamic-code-analysis
     runs-on: ubuntu-latest
@@ -87,28 +112,46 @@ jobs:
       - name: Deploy to Stage
         run: echo "[Deploy to Stage] Deploy"
 
-  post-deployment-checks-stage:
+  # ---------- Post-Deployment Checks (Stage) (paralelo) ----------
+  integration-test-stage:
     needs: deploy-to-stage
     runs-on: ubuntu-latest
     steps:
       - name: IntegrationTest
-        run: echo "[Post-Deployment Checks] IntegrationTest"
+        run: echo "[Post-Deployment Checks Stage] IntegrationTest"
 
+  smoke-test-stage:
+    needs: deploy-to-stage
+    runs-on: ubuntu-latest
+    steps:
       - name: SmokeTest
-        run: echo "[Post-Deployment Checks] SmokeTest"
+        run: echo "[Post-Deployment Checks Stage] SmokeTest"
 
-  non-function-tests:
-    needs: post-deployment-checks-stage
+  # ---------- Non-Function Tests (paralelo) ----------
+  accessibility:
+    needs: [integration-test-stage, smoke-test-stage]
     runs-on: ubuntu-latest
     steps:
       - name: Accessibility
         run: echo "[Non-Function Tests] Accessibility"
 
+  dynamic-security-test:
+    needs: [integration-test-stage, smoke-test-stage]
+    runs-on: ubuntu-latest
+    steps:
       - name: DynamicSecurityTest
         run: echo "[Non-Function Tests] DynamicSecurityTest"
 
+  load-test:
+    needs: [integration-test-stage, smoke-test-stage]
+    runs-on: ubuntu-latest
+    steps:
       - name: LoadTest
         run: echo "[Non-Function Tests] LoadTest"
 
+  performance-test:
+    needs: [integration-test-stage, smoke-test-stage]
+    runs-on: ubuntu-latest
+    steps:
       - name: PerformanceTest
         run: echo "[Non-Function Tests] PerformanceTest"
