@@ -2,156 +2,39 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  # ---------- Setup and Checkout ----------
-  setup-and-checkout:
+  build-test-package:
+    name: Build, Test and Package
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
-        run: echo "[Setup and Checkout] Checkout"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: MVNSetup
-        run: echo "[Setup and Checkout] MVNSetup"
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
 
-  # ---------- Build ----------
-  build:
-    needs: setup-and-checkout
-    runs-on: ubuntu-latest
-    steps:
-      - name: Build
-        run: echo "[Build] Build"
+      - name: Run tests and package application
+        run: mvn -B -f linker5-java/pom.xml clean verify
 
-  # ---------- Continuous Integration Tests ----------
-  continuous-integration-tests:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: IntegrationTest
-        run: echo "[Continuous Integration Tests] IntegrationTest"
-
-      - name: UnitTests
-        run: echo "[Continuous Integration Tests] UnitTests"
-
-  # ---------- Static Code Analysis (paralelo) ----------
-  dependency-scan:
-    needs: continuous-integration-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: DependencyScan
-        run: echo "[Static Code Analysis] DependencyScan"
-
-  quality-scan:
-    needs: continuous-integration-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: QualityScan
-        run: echo "[Static Code Analysis] QualityScan"
-
-  security-scan:
-    needs: continuous-integration-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: SecurityScan
-        run: echo "[Static Code Analysis] SecurityScan"
-
-  # ---------- Deploy to QA ----------
-  deploy-to-qa:
-    needs: [dependency-scan, quality-scan, security-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to QA
-        run: echo "[Deploy to QA] Deploy"
-
-  # ---------- Post-Deployment Checks (QA) (paralelo) ----------
-  integration-test-qa:
-    needs: deploy-to-qa
-    runs-on: ubuntu-latest
-    steps:
-      - name: IntegrationTest
-        run: echo "[Post-Deployment Checks QA] IntegrationTest"
-
-  smoke-test-qa:
-    needs: deploy-to-qa
-    runs-on: ubuntu-latest
-    steps:
-      - name: SmokeTest
-        run: echo "[Post-Deployment Checks QA] SmokeTest"
-
-  # ---------- Functional Tests (paralelo) ----------
-  test-local:
-    needs: [integration-test-qa, smoke-test-qa]
-    runs-on: ubuntu-latest
-    steps:
-      - name: TestLocal
-        run: echo "[Functional Tests] TestLocal"
-
-  test-remote:
-    needs: [integration-test-qa, smoke-test-qa]
-    runs-on: ubuntu-latest
-    steps:
-      - name: TestRemote
-        run: echo "[Functional Tests] TestRemote"
-
-  # ---------- Dynamic Code Analysis ----------
-  dynamic-code-analysis:
-    needs: [test-local, test-remote]
-    runs-on: ubuntu-latest
-    steps:
-      - name: QualityScan
-        run: echo "[Dynamic Code Analysis] QualityScan"
-
-  # ---------- Deploy to Stage ----------
-  deploy-to-stage:
-    needs: dynamic-code-analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to Stage
-        run: echo "[Deploy to Stage] Deploy"
-
-  # ---------- Post-Deployment Checks (Stage) (paralelo) ----------
-  integration-test-stage:
-    needs: deploy-to-stage
-    runs-on: ubuntu-latest
-    steps:
-      - name: IntegrationTest
-        run: echo "[Post-Deployment Checks Stage] IntegrationTest"
-
-  smoke-test-stage:
-    needs: deploy-to-stage
-    runs-on: ubuntu-latest
-    steps:
-      - name: SmokeTest
-        run: echo "[Post-Deployment Checks Stage] SmokeTest"
-
-  # ---------- Non-Function Tests (paralelo) ----------
-  accessibility:
-    needs: [integration-test-stage, smoke-test-stage]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Accessibility
-        run: echo "[Non-Function Tests] Accessibility"
-
-  dynamic-security-test:
-    needs: [integration-test-stage, smoke-test-stage]
-    runs-on: ubuntu-latest
-    steps:
-      - name: DynamicSecurityTest
-        run: echo "[Non-Function Tests] DynamicSecurityTest"
-
-  load-test:
-    needs: [integration-test-stage, smoke-test-stage]
-    runs-on: ubuntu-latest
-    steps:
-      - name: LoadTest
-        run: echo "[Non-Function Tests] LoadTest"
-
-  performance-test:
-    needs: [integration-test-stage, smoke-test-stage]
-    runs-on: ubuntu-latest
-    steps:
-      - name: PerformanceTest
-        run: echo "[Non-Function Tests] PerformanceTest"
+      - name: Upload executable jar
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linker5-jar-with-dependencies
+          path: linker5-java/target/*-jar-with-dependencies.jar
+          if-no-files-found: error
