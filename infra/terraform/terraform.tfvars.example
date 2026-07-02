@@ -8,10 +8,19 @@ compartment_ocid = "ocid1.compartment.oc1..xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # Retrieve it from the Vault secret sec-linker5-vm-sshpubkey, or paste your own.
 ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
 
-# REQUIRED FOR PRIVATE REPO: GitHub read-only Personal Access Token used to clone.
-# Leave empty ("") if the repository is public.
-# Use a short-lived, fine-grained token (Contents: Read-only) — it lands in the VM user_data.
+# GitHub token: leave empty for a public repo.
 github_token = ""
+
+# --- NETWORK MODE ---
+# Landing zones usually block VCN creation, so the default reuses an existing subnet.
+# Set this to the subnet OCID where the VM should live (same one as the existing VM).
+create_network = false
+subnet_ocid    = "ocid1.subnet.oc1.sa-bogota-1.xxxxxxxxxxxxxxxxxxxx"
+
+# If you DO have networking permissions and want everything from scratch instead:
+# create_network   = true
+# assign_public_ip = true
+# subnet_ocid      = ""   # not needed in that mode
 
 # --- Everything below is optional (sensible defaults already set) ---
 

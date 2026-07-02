@@ -35,7 +35,7 @@ resource "oci_core_instance" "linker" {
   }
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.subnet.id
+    subnet_id        = local.subnet_id
     assign_public_ip = var.assign_public_ip
     display_name     = "${var.project_name}-vnic"
   }

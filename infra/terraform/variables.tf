@@ -75,6 +75,18 @@ variable "app_port" {
   default     = 8080
 }
 
+variable "create_network" {
+  description = "true = create the full network from scratch (needs VCN/networking permissions). false = reuse an existing subnet (set subnet_ocid). Landing zones usually require false."
+  type        = bool
+  default     = false
+}
+
+variable "subnet_ocid" {
+  description = "OCID of an existing subnet to place the VM in (used when create_network = false)."
+  type        = string
+  default     = ""
+}
+
 variable "vcn_cidr" {
   description = "CIDR of the new VCN (different from the existing 10.0.0.0/16 to avoid clashes)."
   type        = string
@@ -88,7 +100,7 @@ variable "subnet_cidr" {
 }
 
 variable "assign_public_ip" {
-  description = "Assign a public IP to the VM (true = reachable from the internet)."
+  description = "Assign a public IP to the VM. Set false when reusing a private subnet that prohibits public IPs."
   type        = bool
-  default     = true
+  default     = false
 }
