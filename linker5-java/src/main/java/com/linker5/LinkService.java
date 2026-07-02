@@ -1,0 +1,54 @@
+package com.linker5;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
+import java.net.URI;
+import java.sql.Connection;
+import java.util.Optional;
+
+public class LinkService {
+
+    private final Gson gson;
+    private final LinkRepository repository;
+    private final ShortIdGenerator idGenerator;
+
+    public LinkService() {
+        this(new Gson(), new LinkRepository(), new UuidShortIdGenerator());
+    }
+
+    public LinkService(Gson gson, LinkRepository repository, ShortIdGenerator idGenerator) {
+        this.gson = gson;
+        this.repository = repository;
+        this.idGenerator = idGenerator;
+    }
+
+    public CreateLinkResult createShortLink(String requestBody, String host, Connection connection) throws Exception {
+        String url = extractUrl(requestBody);
+        validateAbsoluteUrl(url);
+
+        String id = idGenerator.generate();
+        repository.save(connection, id, url);
+
+        return new CreateLinkResult(id, buildShortUrl(host, id));
+    }
+
+    public Optional<String> resolveShortLink(String id, Connection connection) throws Exception {
+        return repository.findUrlById(connection, id);
+    }
+
+    String extractUrl(String requestBody) {
+        JsonObject payload = gson.fromJson(requestBody, JsonObject.class);
+        return payload.get("url").getAsString();
+    }
+
+    void validateAbsoluteUrl(String url) {
+        if (!URI.create(url).isAbsolute()) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+    }
+
+    String buildShortUrl(String host, String id) {
+        return String.format("http://%s/%s", host, id);
+    }
+}
