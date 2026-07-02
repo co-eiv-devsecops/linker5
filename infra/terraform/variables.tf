@@ -27,6 +27,12 @@ variable "project_name" {
   default     = "linker5"
 }
 
+variable "image_ocid" {
+  description = "Explicit image OCID to use. Leave empty to auto-select the latest Ubuntu 24.04 image (requires image-listing permission in the compartment)."
+  type        = string
+  default     = ""
+}
+
 variable "instance_shape" {
   description = "VM shape. E2.1.Micro is Always Free (x86). For ARM use VM.Standard.A1.Flex and set ocpus/memory."
   type        = string

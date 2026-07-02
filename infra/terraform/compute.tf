@@ -9,8 +9,10 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Latest Ubuntu 24.04 image compatible with the chosen shape (auto = repeatable across regions)
+# Latest Ubuntu 24.04 image compatible with the chosen shape (auto = repeatable across regions).
+# Skipped when image_ocid is set explicitly (e.g. when the compartment can't list images).
 data "oci_core_images" "ubuntu" {
+  count                    = var.image_ocid == "" ? 1 : 0
   compartment_id           = var.compartment_ocid
   operating_system         = "Canonical Ubuntu"
   operating_system_version = "24.04"
@@ -42,7 +44,7 @@ resource "oci_core_instance" "linker" {
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ubuntu.images[0].id
+    source_id   = var.image_ocid != "" ? var.image_ocid : try(data.oci_core_images.ubuntu[0].images[0].id, null)
   }
 
   metadata = {
