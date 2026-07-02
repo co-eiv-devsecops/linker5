@@ -83,6 +83,39 @@ instance_ocpus      = 1
 instance_memory_gbs = 6
 ```
 
+## Required IAM permissions
+
+`terraform apply` creates networking and compute resources, which requires the
+identity running Terraform to have manage permissions in the target compartment.
+In a locked-down course/landing-zone tenancy these are usually NOT granted to
+students (read-only), so `apply` fails with `404-NotAuthorizedOrNotFound` on
+`CreateVcn` / `LaunchInstance` even though `plan` succeeds (plan is read-only).
+
+To actually run `apply`, an administrator must grant the student group a policy
+like this (full from-scratch mode, single compartment):
+
+```
+Allow group <student-group> to manage virtual-network-family in compartment <target>
+Allow group <student-group> to manage instance-family        in compartment <target>
+Allow group <student-group> to manage volume-family          in compartment <target>
+Allow group <student-group> to read   instance-images        in compartment <target>
+```
+
+If reusing an existing subnet that lives in a separate network compartment
+(create_network = false), also add:
+
+```
+Allow group <student-group> to use subnets in compartment <network-compartment>
+Allow group <student-group> to use vnics   in compartment <network-compartment>
+```
+
+Verify your own permission quickly with the CLI (creates + deletes a throwaway VCN):
+
+```bash
+oci network vcn create --compartment-id <target> --cidr-blocks '["10.9.0.0/16"]' --display-name perm-test
+# if it succeeds you have create rights; delete it with: oci network vcn delete --vcn-id <id> --force
+```
+
 ## Notes
 
 - For a **private** repo, set `github_token` to a read-only, fine-grained GitHub
