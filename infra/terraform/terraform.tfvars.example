@@ -1,0 +1,27 @@
+# Copy this file to terraform.tfvars and fill in your values.
+#   cp terraform.tfvars.example terraform.tfvars
+
+# REQUIRED: OCID of the compartment where resources will be created.
+compartment_ocid = "ocid1.compartment.oc1..xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# REQUIRED: SSH public key content (single line, starts with "ssh-rsa" or "ssh-ed25519").
+# Retrieve it from the Vault secret sec-linker5-vm-sshpubkey, or paste your own.
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
+
+# REQUIRED FOR PRIVATE REPO: GitHub read-only Personal Access Token used to clone.
+# Leave empty ("") if the repository is public.
+# Use a short-lived, fine-grained token (Contents: Read-only) — it lands in the VM user_data.
+github_token = ""
+
+# --- Everything below is optional (sensible defaults already set) ---
+
+# region           = "sa-bogota-1"
+# repo_url         = "https://github.com/co-eiv-devsecops/linker5.git"
+# repo_branch      = "main"
+# app_port         = 8080
+# instance_shape   = "VM.Standard.E2.1.Micro"
+
+# For an ARM Always-Free shape (more RAM/CPU) use instead:
+# instance_shape      = "VM.Standard.A1.Flex"
+# instance_ocpus      = 1
+# instance_memory_gbs = 6

@@ -1,0 +1,52 @@
+#cloud-config
+# Provisions a fresh Ubuntu VM to run Linker:
+# installs the JDK + Maven + git, clones the repo, builds the jar and
+# registers a systemd service so the app starts on boot and restarts on failure.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - openjdk-21-jdk-headless
+  - maven
+  - git
+
+write_files:
+  # systemd unit for Linker (same one committed at scripts/linker.service)
+  - path: /etc/systemd/system/linker.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Linker URL Shortener
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ubuntu
+      WorkingDirectory=/home/ubuntu
+      Environment=PORT=${app_port}
+      ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  # 2 GB swap so the Maven build is reliable on the 1 GB Always-Free shape
+  - fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - bash -c 'echo "/swapfile none swap sw 0 0" >> /etc/fstab'
+
+  # Clone, build and expose a stable jar path (symlink) for systemd
+  - git clone --branch ${repo_branch} ${clone_url} /home/ubuntu/linker5
+  - chown -R ubuntu:ubuntu /home/ubuntu/linker5
+  - su - ubuntu -c "cd /home/ubuntu/linker5/linker5-java && mvn -q clean package -DskipTests"
+  - su - ubuntu -c "ln -sf /home/ubuntu/linker5/linker5-java/target/*-jar-with-dependencies.jar /home/ubuntu/linker.jar"
+
+  # Start the service
+  - systemctl daemon-reload
+  - systemctl enable --now linker.service

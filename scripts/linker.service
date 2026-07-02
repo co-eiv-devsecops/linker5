@@ -1,0 +1,16 @@
+[Unit]
+Description=Linker URL Shortener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+Environment=PORT=8080
+ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
