@@ -23,8 +23,8 @@ public class Main {
     private static Connection db;
 
     public static void main(String[] args) throws Exception {
-        db = DriverManager.getConnection(LINKER.getDatabaseConnectionString());
-        db.createStatement().execute("CREATE TABLE IF NOT EXISTS shorturl(id TEXT PRIMARY KEY, url TEXT NOT NULL)");
+        db = openDatabase();
+        initializeSchema(db);
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", Main::handle);
@@ -87,5 +87,13 @@ public class Main {
         ex.sendResponseHeaders(status, bytes.length);
         ex.getResponseBody().write(bytes);
         ex.close();
+    }
+
+    private static Connection openDatabase() throws Exception {
+        return DriverManager.getConnection(LINKER.getDatabaseConnectionString());
+    }
+
+    private static void initializeSchema(Connection database) throws Exception {
+        database.createStatement().execute("CREATE TABLE IF NOT EXISTS shorturl(id TEXT PRIMARY KEY, url TEXT NOT NULL)");
     }
 }
