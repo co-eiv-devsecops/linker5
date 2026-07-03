@@ -40,4 +40,29 @@ class LinkServiceTest {
             assertEquals("Invalid URL", exception.getMessage());
         }
     }
+
+    @Test
+    void shouldReturnEmptyWhenShortLinkDoesNotExist() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            assertEquals(Optional.empty(), service.resolveShortLink("missing-id", connection));
+        }
+    }
+
+    @Test
+    void shouldRejectBlankShortLinkIds() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.resolveShortLink("", connection));
+
+            assertEquals("Invalid short link id", exception.getMessage());
+        }
+    }
 }
