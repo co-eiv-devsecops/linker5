@@ -2,6 +2,7 @@ package com.linker5;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import org.sqlite.SQLiteException;
 
 import java.net.URI;
 import java.sql.Connection;
@@ -28,9 +29,20 @@ public class LinkService {
         validateAbsoluteUrl(url);
 
         String id = resolveId(requestBody, connection);
-        repository.save(connection, id, url);
+        try {
+            repository.save(connection, id, url);
+        } catch (SQLiteException exception) {
+            if (isDuplicateShortLinkId(exception)) {
+                throw new IllegalArgumentException("Short link id already exists");
+            }
+            throw exception;
+        }
 
         return new CreateLinkResult(id, buildShortUrl(host, id));
+    }
+
+    boolean isDuplicateShortLinkId(SQLiteException exception) {
+        return exception.getMessage() != null && exception.getMessage().contains("UNIQUE constraint failed: shorturl.id");
     }
 
     private String resolveId(String requestBody, Connection connection) throws Exception {
