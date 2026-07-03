@@ -34,6 +34,7 @@ public class LinkService {
     }
 
     public Optional<String> resolveShortLink(String id, Connection connection) throws Exception {
+        validateShortLinkId(id);
         return repository.findUrlById(connection, id);
     }
 
@@ -45,6 +46,12 @@ public class LinkService {
     void validateAbsoluteUrl(String url) {
         if (!URI.create(url).isAbsolute()) {
             throw new IllegalArgumentException("Invalid URL");
+        }
+    }
+
+    void validateShortLinkId(String id) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("Invalid short link id");
         }
     }
 
