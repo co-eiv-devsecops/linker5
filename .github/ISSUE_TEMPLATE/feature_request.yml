@@ -1,0 +1,38 @@
+name: Pedido de mejora
+description: Proponé una nueva funcionalidad o mejora
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema u oportunidad
+      description: ¿Qué problema querés resolver o qué oportunidad ves?
+      placeholder: Describí la necesidad de forma clara.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solución propuesta
+      description: ¿Qué te gustaría que pase?
+      placeholder: Describí la solución que proponés.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: ¿Qué otras opciones o caminos evaluaste?
+      placeholder: Listá alternativas o workarounds.
+  - type: input
+    id: area
+    attributes:
+      label: Área afectada
+      placeholder: linker5-java / infra/terraform / scripts / docs
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto adicional
+      description: Sumá ejemplos, mockups o cualquier contexto útil.

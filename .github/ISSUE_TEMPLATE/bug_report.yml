@@ -1,0 +1,57 @@
+name: Reporte de bug
+description: Reportá un problema reproducible en Linker
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tomarte el tiempo de reportar un bug.
+
+        Antes de enviarlo, confirmá que esto no sea un problema de seguridad. Los reportes de seguridad deben seguir `SECURITY.md` y no deben publicarse de forma abierta.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Resumen
+      description: ¿Qué está fallando?
+      placeholder: Contá el problema de forma breve y clara.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      description: ¿Cómo podemos reproducir el problema?
+      placeholder: |
+        1. Ir a ...
+        2. Ejecutar ...
+        3. Ver ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      placeholder: ¿Qué debería haber pasado?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+      placeholder: ¿Qué pasó en realidad?
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Área afectada
+      description: ¿Qué parte del repo está afectada?
+      placeholder: linker5-java / infra/terraform / scripts / docs
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs o capturas relevantes
+      description: Pegá logs, stack traces o capturas si ayudan.
+      render: shell

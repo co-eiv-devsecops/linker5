@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Guía de soporte
+    url: https://github.com/co-eiv-devsecops/linker5/blob/main/SUPPORT.md
+    about: Revisá esta guía antes de abrir una consulta.
+  - name: Política de seguridad
+    url: https://github.com/co-eiv-devsecops/linker5/blob/main/SECURITY.md
+    about: Reportá vulnerabilidades de forma privada siguiendo esta política.
