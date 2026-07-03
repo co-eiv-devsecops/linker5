@@ -39,6 +39,30 @@ class LinkServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("Cuando el id autogenerado ya existe")
+    class WhenGeneratedShortLinkIdAlreadyExists {
+
+        @ParameterizedTest(name = "When_GeneratedShortLinkIdAlreadyExists_Expect_ClearFailure [{index}]")
+        @ValueSource(strings = {"https://example.com", "https://escuelaing.edu.co"})
+        void When_GeneratedShortLinkIdAlreadyExists_Expect_ClearFailure(String url) throws Exception {
+            // Arrange
+            LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+            try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+                repository.initializeSchema(connection);
+                repository.save(connection, "abcd1234", "https://existing-link.com");
+
+                // Act
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                        service.createShortLink("{\"url\":\"" + url + "\"}", "localhost:8080", connection));
+
+                // Assert
+                assertEquals("Short link id already exists", exception.getMessage());
+            }
+        }
+    }
+
     @Test
     void shouldCreateShortLinkUsingTheProvidedDependencies() throws Exception {
         LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
