@@ -158,7 +158,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/co-eiv-devsecops/material-curso</url>
+            <url>https://maven.pkg.github.com/co-eiv-devsecops/linker5</url>
         </repository>
     </distributionManagement>
 </project>

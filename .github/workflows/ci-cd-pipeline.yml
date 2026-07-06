@@ -50,6 +50,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Run tests
         run: mvn -B -f linker5-java/pom.xml test
@@ -69,6 +72,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Publish package to GitHub Packages
         if: github.event_name == 'push'
