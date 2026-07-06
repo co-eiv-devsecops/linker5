@@ -3,10 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
     branches:
-      - '**'
+      - main
   workflow_dispatch:
 
 permissions:
@@ -77,14 +77,14 @@ jobs:
           server-password: GITHUB_TOKEN
 
       - name: Publish package to GitHub Packages
-        # Se eliminó el "if" para que corra en PRs y cualquier rama
+        if: github.event_name == 'push'
         run: mvn -B -f linker5-java/pom.xml deploy -DskipTests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Upload executable jar
-        # Se eliminó el "if" para que corra en PRs y cualquier rama
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
           name: linker-app
@@ -95,6 +95,7 @@ jobs:
     name: Test OCI Deploy
     runs-on: ubuntu-latest
     needs: package
+    if: github.event_name == 'push'
 
     environment:
       name: production
