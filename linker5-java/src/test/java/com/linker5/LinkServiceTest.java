@@ -1,7 +1,11 @@
 package com.linker5;
 
 import com.google.gson.Gson;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -13,6 +17,51 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class LinkServiceTest {
 
     private final LinkRepository repository = new LinkRepository();
+
+    @Nested
+    @DisplayName("Cuando el short link id está vacío o en blanco")
+    class WhenShortLinkIdIsBlank {
+
+        @ParameterizedTest(name = "When_ShortLinkIdIsBlank_Expect_IllegalArgumentException [{index}]")
+        @ValueSource(strings = {"", " ", "   ", "\t"})
+        void When_ShortLinkIdIsBlank_Expect_IllegalArgumentException(String shortLinkId) throws Exception {
+
+            LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+            try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+                repository.initializeSchema(connection);
+
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                        service.resolveShortLink(shortLinkId, connection));
+
+                assertEquals("Invalid short link id", exception.getMessage());
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Cuando el id autogenerado ya existe")
+    class WhenGeneratedShortLinkIdAlreadyExists {
+
+        @ParameterizedTest(name = "When_GeneratedShortLinkIdAlreadyExists_Expect_ClearFailure [{index}]")
+        @ValueSource(strings = {"https://example.com", "https://escuelaing.edu.co"})
+        void When_GeneratedShortLinkIdAlreadyExists_Expect_ClearFailure(String url) throws Exception {
+            // Arrange
+            LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+            try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+                repository.initializeSchema(connection);
+                repository.save(connection, "abcd1234", "https://existing-link.com");
+
+                // Act
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                        service.createShortLink("{\"url\":\"" + url + "\"}", "localhost:8080", connection));
+
+                // Assert
+                assertEquals("Short link id already exists", exception.getMessage());
+            }
+        }
+    }
 
     @Test
     void shouldCreateShortLinkUsingTheProvidedDependencies() throws Exception {
@@ -38,6 +87,92 @@ class LinkServiceTest {
                     service.createShortLink("{\"url\":\"/relative\"}", "localhost:8080", connection));
 
             assertEquals("Invalid URL", exception.getMessage());
+        }
+    }
+
+    @Test
+    void shouldReturnEmptyWhenShortLinkDoesNotExist() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            assertEquals(Optional.empty(), service.resolveShortLink("missing-id", connection));
+        }
+    }
+
+    @Test
+    void shouldRejectBlankShortLinkIds() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "abcd1234");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.resolveShortLink("", connection));
+
+            assertEquals("Invalid short link id", exception.getMessage());
+        }
+    }
+
+    @Test
+    void shouldCreateAndResolveShortLinkUsingAnAlias() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "generated-id");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            CreateLinkResult result = service.createShortLink(
+                    "{\"url\":\"https://example.com\",\"alias\":\"docs\"}",
+                    "localhost:8080",
+                    connection
+            );
+
+            assertEquals("docs", result.id());
+            assertEquals("http://localhost:8080/docs", result.shortUrl());
+            assertEquals(Optional.of("https://example.com"), service.resolveShortLink("docs", connection));
+        }
+    }
+
+    @Test
+    void shouldRejectDuplicateAliasesWhenCreatingShortLinks() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "generated-id");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            service.createShortLink(
+                    "{\"url\":\"https://example.com\",\"alias\":\"docs\"}",
+                    "localhost:8080",
+                    connection
+            );
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink(
+                            "{\"url\":\"https://another-example.com\",\"alias\":\"docs\"}",
+                            "localhost:8080",
+                            connection
+                    ));
+
+            assertEquals("Alias already exists", exception.getMessage());
+        }
+    }
+
+    @Test
+    void shouldRejectBlankAliasesWhenCreatingShortLinks() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> "generated-id");
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink(
+                            "{\"url\":\"https://example.com\",\"alias\":\"\"}",
+                            "localhost:8080",
+                            connection
+                    ));
+
+            assertEquals("Invalid alias", exception.getMessage());
         }
     }
 }

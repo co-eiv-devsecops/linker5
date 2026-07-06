@@ -20,28 +20,25 @@
     </properties>
 <dependencies>
 
-    <!-- SQLite -->
     <dependency>
         <groupId>org.xerial</groupId>
         <artifactId>sqlite-jdbc</artifactId>
         <version>3.50.3.0</version>
     </dependency>
 
-    <!-- Gson -->
     <dependency>
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
         <version>2.13.1</version>
     </dependency>
 
-    <!-- Logger -->
+
     <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-simple</artifactId>
         <version>2.0.16</version>
     </dependency>
 
-    <!-- Tests -->
     <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
@@ -107,11 +104,11 @@
     <artifactId>maven-surefire-plugin</artifactId>
     <version>3.5.2</version>
     <configuration>
-        <argLine>${argLine}</argLine> <!-- ESTA LÍNEA ES CLAVE -->
+        <argLine>${argLine}</argLine>
     </configuration>
 </plugin>
 
-<!-- 2. Tu JaCoCo se queda igual, pero hereda esa línea -->
+
 <plugin>
     <groupId>org.jacoco</groupId>
     <artifactId>jacoco-maven-plugin</artifactId>
@@ -122,7 +119,6 @@
             <goals>
                 <goal>prepare-agent</goal>
             </goals>
-            <!-- JaCoCo escribe por defecto el agente en la propiedad llamada 'argLine' -->
         </execution>
         <execution>
             <id>report</id>
@@ -158,5 +154,11 @@
         </plugins>
 
     </build>
-
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/co-eiv-devsecops/linker5</url>
+        </repository>
+    </distributionManagement>
 </project>

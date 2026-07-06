@@ -1,0 +1,127 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Compile application
+        run: mvn -B -f linker5-java/pom.xml clean compile
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Run tests
+        run: mvn -B -f linker5-java/pom.xml test
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Publish package to GitHub Packages
+        if: github.event_name == 'push'
+        run: mvn -B -f linker5-java/pom.xml deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Upload executable jar
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linker-app
+          path: linker5-java/target/*-jar-with-dependencies.jar
+          if-no-files-found: error
+
+  deploy-prod:
+    name: Test OCI Deploy
+    runs-on: ubuntu-latest
+    needs: package
+    if: github.event_name == 'push'
+
+    environment:
+      name: production
+
+    env:
+      DEPLOYMENT_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
+      DEPLOYMENT_PUBLIC_KEY: ${{ vars.DEPLOYMENT_PUBLIC_KEY }}
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
+
+    steps:
+      - name: Connect to OCI VM
+        uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+        with:
+          instance-id: ${{ vars.OCI_INSTANCE_OCID }}
+          artifact-name: linker-app
+          target-path: /tmp/deploy/linker/${{ github.sha }}
+          target-os-username: ubuntu
+          script: |
+            set -euo pipefail
+
+            echo "Conexión exitosa"
+            hostname
+            pwd
+            ls -la
