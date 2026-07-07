@@ -13,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,10 +23,16 @@ public class Main {
     private static final Linker LINKER = new Linker();
     private static final Logger LOG = Logger.getLogger(Main.class.getName());
     private static Connection db;
+    private static RedirectHandler redirectHandler;
 
     public static void main(String[] args) throws Exception {
         db = openDatabase();
         initializeSchema(db);
+        
+        // Initialize feature flag provider (can be switched to LaunchDarklyFeatureFlagProvider)
+        FeatureFlagProvider featureFlagProvider = new EnvFeatureFlagProvider();
+        redirectHandler = new RedirectHandler(new LinkRepository(), featureFlagProvider);
+        
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", Main::handle);
@@ -73,11 +78,9 @@ public class Main {
 
     private static void redirect(HttpExchange ex, String id) throws Exception {
         LOG.info("Redirect lookup for id=" + id);
-        PreparedStatement st = db.prepareStatement("SELECT url FROM shorturl WHERE id=?");
-        st.setString(1, id);
-        ResultSet rs = st.executeQuery();
-        if (rs.next()) {
-            String target = rs.getString("url");
+        var redirectUrl = redirectHandler.resolveRedirect(id, db);
+        if (redirectUrl.isPresent()) {
+            String target = redirectUrl.get();
             LOG.info("Redirect success: id=" + id + " -> " + target);
             ex.getResponseHeaders().add("Location", target);
             ex.sendResponseHeaders(302, -1);
