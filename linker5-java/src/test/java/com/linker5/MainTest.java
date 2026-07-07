@@ -21,6 +21,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -173,6 +175,26 @@ class MainTest {
         assertEquals(500, exchange.statusCode);
         assertEquals("{\"error\":\"Server error\"}", exchange.responseAsText());
         assertEquals("application/json", exchange.getResponseHeaders().getFirst("Content-Type"));
+    }
+
+    @Test
+    void shouldResolveRoutesAndConfigureLoggingHelpers() throws Exception {
+        Method resolveRoute = Main.class.getDeclaredMethod("resolveRoute", String.class, String.class);
+        resolveRoute.setAccessible(true);
+        assertEquals("create-short-link", resolveRoute.invoke(null, "/link", "POST"));
+        assertEquals("root-ui", resolveRoute.invoke(null, "/", "GET"));
+        assertEquals("static-asset", resolveRoute.invoke(null, "/css/style.css", "GET"));
+        assertEquals("redirect-short-link", resolveRoute.invoke(null, "/abc12345", "GET"));
+
+        Method configureLogging = Main.class.getDeclaredMethod("configureLogging", Level.class);
+        configureLogging.setAccessible(true);
+        configureLogging.invoke(null, Level.FINE);
+        assertEquals(Level.FINE, Logger.getLogger("").getLevel());
+
+        Method elapsedMillis = Main.class.getDeclaredMethod("elapsedMillis", long.class);
+        elapsedMillis.setAccessible(true);
+        long value = (long) elapsedMillis.invoke(null, System.nanoTime() - 2_000_000);
+        assertTrue(value >= 0);
     }
 
     @Test
