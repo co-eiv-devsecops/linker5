@@ -216,6 +216,13 @@ class MainTest {
 
 
 
+    @Test
+    void shouldFallBackToEnvProviderWhenLaunchDarklyKeyIsMissing() {
+        assertTrue(Main.createFeatureFlagProvider(null) instanceof EnvFeatureFlagProvider);
+        assertTrue(Main.createFeatureFlagProvider("") instanceof EnvFeatureFlagProvider);
+        assertTrue(Main.createFeatureFlagProvider("   ") instanceof EnvFeatureFlagProvider);
+    }
+
     private static void invokeHandle(FakeHttpExchange exchange) throws Exception {
         invokePrivateStatic("handle", HttpExchange.class, exchange);
     }

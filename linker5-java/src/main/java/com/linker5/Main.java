@@ -40,7 +40,7 @@ public class Main {
             db = openDatabase();
             initializeSchema(db);
 
-            FeatureFlagProvider featureFlagProvider = new LaunchDarklyFeatureFlagProvider();
+            FeatureFlagProvider featureFlagProvider = createFeatureFlagProvider(System.getenv("LAUNCHDARKLY_SDK_KEY"));
             redirectHandler = new RedirectHandler(new LinkRepository(), featureFlagProvider);
 
             HttpServer server = HttpServer.create(new InetSocketAddress(config.port()), 0);
@@ -52,6 +52,18 @@ public class Main {
             logFatal("No se pudo iniciar Linker", exception);
             throw exception;
         }
+    }
+
+    // Choose the feature flag backend based on configuration: LaunchDarkly when an
+    // SDK key is present, otherwise the environment-variable provider. This keeps the
+    // app deployable without LaunchDarkly configured instead of crashing at startup.
+    static FeatureFlagProvider createFeatureFlagProvider(String launchDarklySdkKey) {
+        if (launchDarklySdkKey != null && !launchDarklySdkKey.isBlank()) {
+            LOG.info("[Info] Using LaunchDarkly feature flag provider");
+            return new LaunchDarklyFeatureFlagProvider();
+        }
+        LOG.warning("[Warn] LAUNCHDARKLY_SDK_KEY not set; using environment feature flag provider");
+        return new EnvFeatureFlagProvider();
     }
 
     private static void handle(HttpExchange ex) throws IOException {
