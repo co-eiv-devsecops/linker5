@@ -1,5 +1,7 @@
 # Linker
 
+[![CI/CD Pipeline](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml/badge.svg?branch=main)](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml)
+
 Linker is a monolithic URL shortener: it turns a long URL into a short one that
 redirects. Single-file backend (`< 100` lines) plus a small static UI.
 
