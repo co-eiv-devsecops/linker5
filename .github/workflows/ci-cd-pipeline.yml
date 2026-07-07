@@ -135,10 +135,10 @@ jobs:
             fi
             echo "Deploying artifact: $JAR"
 
-            # Install the systemd unit if it is not present yet (idempotent, self-contained)
-            if [ ! -f /etc/systemd/system/linker.service ]; then
-              echo "Installing linker.service unit..."
-              sudo tee /etc/systemd/system/linker.service > /dev/null <<'UNIT'
+            # Always (re)install the unit so ExecStart points at the deployed jar.
+            # A pre-existing unit on the VM pointed elsewhere, so the old jar kept running.
+            echo "Installing/updating linker.service unit..."
+            sudo tee /etc/systemd/system/linker.service > /dev/null <<'UNIT'
             [Unit]
             Description=Linker URL Shortener
             After=network-online.target
@@ -158,9 +158,8 @@ jobs:
             [Install]
             WantedBy=multi-user.target
             UNIT
-              sudo systemctl daemon-reload
-              sudo systemctl enable linker.service
-            fi
+            sudo systemctl daemon-reload
+            sudo systemctl enable linker.service
 
             # Publish the new jar to the stable path the service runs from
             sudo systemctl stop linker.service || true
