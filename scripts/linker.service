@@ -8,6 +8,10 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu
 Environment=PORT=8080
+Environment=LINKER_LOG_LEVEL=INFO
+Environment=LINKER_OTEL_LOG_EXPORT=false
+# Uncomment and point to your collector when OTLP export is needed.
+# Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
 Restart=always
 RestartSec=5

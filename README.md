@@ -28,6 +28,78 @@ mvn clean package -DskipTests
 java -jar target/*-jar-with-dependencies.jar   # serves on http://localhost:8080/
 ```
 
+## Observability configuration
+
+The same JAR artifact can run with different log verbosity levels by changing only runtime configuration.
+
+### Log verbosity
+
+Linker reads the log level from either:
+
+- Java system property: `-Dlinker.log.level=...`
+- Environment variable: `LINKER_LOG_LEVEL=...`
+
+Supported values are `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+
+Internally, the app maps them to Java logging thresholds, but the emitted application messages are reflected with the required names: `Debug`, `Info`, `Warn`, `Error`, `Fatal`.
+
+To keep the terminal output cleaner in local runs, OpenTelemetry log export is disabled by default. You can enable duplicated OTel log records only when needed with:
+
+- `LINKER_OTEL_LOG_EXPORT=true`
+- or `-Dlinker.otel.logs.enabled=true`
+
+Examples:
+
+```bash
+cd linker5-java
+mvn clean package -DskipTests
+
+# Normal operational logs
+java -Dlinker.log.level=INFO -jar target/*-jar-with-dependencies.jar
+
+# More verbose diagnostics with the exact same JAR
+LINKER_LOG_LEVEL=DEBUG java -jar target/*-jar-with-dependencies.jar
+
+# Only critical failures
+LINKER_LOG_LEVEL=FATAL java -jar target/*-jar-with-dependencies.jar
+```
+
+### OpenTelemetry signals included
+
+The application now emits OpenTelemetry:
+
+- Logs
+- Metrics
+- Traces
+
+The implementation uses the OpenTelemetry Java SDK and console/logging exporters so the telemetry can be observed locally without changing the deployable artifact.
+
+### OTLP exporter preparation for Grafana / Collector
+
+The SDK is also prepared to export telemetry through **OTLP** using environment variables.
+
+Supported variables:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — common OTLP endpoint
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` — optional trace-specific endpoint
+- `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` — optional metrics-specific endpoint
+- `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` — optional logs-specific endpoint
+
+Behavior:
+
+- If no OTLP endpoint variable is defined, Linker uses local logging exporters for traces/metrics and keeps OTel log export disabled by default.
+- If any OTLP endpoint variable is defined, Linker switches traces and metrics to OTLP exporters.
+- Logs only go to OTLP if `LINKER_OTEL_LOG_EXPORT=true` is also enabled.
+
+Example for a local collector:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+LINKER_OTEL_LOG_EXPORT=true \
+LINKER_LOG_LEVEL=INFO \
+java -jar target/*-jar-with-dependencies.jar
+```
+
 Create a short link:
 
 ```bash
