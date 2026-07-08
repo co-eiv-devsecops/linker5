@@ -116,6 +116,10 @@ jobs:
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
       OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
+      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
+      MYSQL_USER: ${{ secrets.MYSQL_USER }}
+      MYSQL_PWD: ${{ secrets.MYSQL_PWD }}
 
     steps:
       - name: Deploy to OCI VM
@@ -164,6 +168,10 @@ jobs:
             Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
             Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
             Environment="OTEL_EXPORTER_OTLP_HEADERS=${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}"
+            Environment=MYSQL_HOST=${{ secrets.MYSQL_HOST }}
+            Environment=MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+            Environment=MYSQL_USER=${{ secrets.MYSQL_USER }}
+            Environment=MYSQL_PWD=${{ secrets.MYSQL_PWD }}
             ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
             Restart=always
             RestartSec=5
