@@ -81,6 +81,55 @@ variable "app_port" {
   default     = 8080
 }
 
+variable "linker_log_level" {
+  description = "Application log level for Linker."
+  type        = string
+  default     = "INFO"
+}
+
+variable "linker_otel_log_export" {
+  description = "Enable OTLP log export in addition to traces and metrics."
+  type        = bool
+  default     = true
+}
+
+variable "otel_service_name" {
+  description = "OpenTelemetry service name reported by the application."
+  type        = string
+  default     = "linker5-java"
+}
+
+variable "otel_exporter_otlp_protocol" {
+  description = "OTLP transport protocol. Use http/protobuf for direct Grafana Cloud export."
+  type        = string
+  default     = "http/protobuf"
+}
+
+variable "otel_exporter_otlp_traces_endpoint" {
+  description = "OTLP HTTP endpoint for traces. Leave empty to disable explicit trace endpoint injection."
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_metrics_endpoint" {
+  description = "OTLP HTTP endpoint for metrics. Leave empty to disable explicit metrics endpoint injection."
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_logs_endpoint" {
+  description = "OTLP HTTP endpoint for logs. Leave empty to disable explicit logs endpoint injection."
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_headers" {
+  description = "OTLP headers, e.g. Authorization=Basic%20<token>. Sensitive because it may contain credentials."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "create_network" {
   description = "true = create the full network from scratch (needs VCN/networking permissions). false = reuse an existing subnet (set subnet_ocid). Landing zones usually require false."
   type        = bool
