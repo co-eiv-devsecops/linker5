@@ -50,9 +50,17 @@ resource "oci_core_instance" "linker" {
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
     user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-      clone_url   = local.clone_url
-      repo_branch = var.repo_branch
-      app_port    = var.app_port
+      clone_url                    = local.clone_url
+      repo_branch                  = var.repo_branch
+      app_port                     = var.app_port
+      linker_log_level             = var.linker_log_level
+      linker_otel_log_export       = var.linker_otel_log_export
+      otel_service_name            = var.otel_service_name
+      otel_exporter_otlp_protocol  = var.otel_exporter_otlp_protocol
+      otel_exporter_otlp_traces    = var.otel_exporter_otlp_traces_endpoint
+      otel_exporter_otlp_metrics   = var.otel_exporter_otlp_metrics_endpoint
+      otel_exporter_otlp_logs      = var.otel_exporter_otlp_logs_endpoint
+      otel_exporter_otlp_headers   = var.otel_exporter_otlp_headers
     }))
   }
 }

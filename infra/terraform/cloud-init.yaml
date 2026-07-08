@@ -26,6 +26,22 @@ write_files:
       User=ubuntu
       WorkingDirectory=/home/ubuntu
       Environment=PORT=${app_port}
+      Environment=LINKER_LOG_LEVEL=${linker_log_level}
+      Environment=LINKER_OTEL_LOG_EXPORT=${linker_otel_log_export}
+      Environment=OTEL_SERVICE_NAME=${otel_service_name}
+      Environment=OTEL_EXPORTER_OTLP_PROTOCOL=${otel_exporter_otlp_protocol}
+%{ if otel_exporter_otlp_traces != "" ~}
+      Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${otel_exporter_otlp_traces}
+%{ endif ~}
+%{ if otel_exporter_otlp_metrics != "" ~}
+      Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${otel_exporter_otlp_metrics}
+%{ endif ~}
+%{ if otel_exporter_otlp_logs != "" ~}
+      Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${otel_exporter_otlp_logs}
+%{ endif ~}
+%{ if otel_exporter_otlp_headers != "" ~}
+      Environment="OTEL_EXPORTER_OTLP_HEADERS=${otel_exporter_otlp_headers}"
+%{ endif ~}
       ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
       Restart=always
       RestartSec=5
