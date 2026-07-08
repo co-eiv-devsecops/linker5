@@ -158,12 +158,12 @@ jobs:
             Environment=LINKER_LOG_LEVEL=INFO
             Environment=LINKER_OTEL_LOG_EXPORT=true
             Environment=FEATURE_REDIRECTS_ENABLED=true
-            Environment=OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}
-            Environment=OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL}
-            Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}
-            Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT}
-            Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT}
-            Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}"
+            Environment=OTEL_SERVICE_NAME=linker5-java
+            Environment=OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+            Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+            Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+            Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+            Environment="OTEL_EXPORTER_OTLP_HEADERS=${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}"
             ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
             Restart=always
             RestartSec=5
