@@ -110,6 +110,12 @@ jobs:
       OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
       OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
       OCI_INSTANCE_OCID: "ocid1.instance.oc1.sa-bogota-1.anrgcljrlthnxiycwliveenfuav6tnjnwuozz76dpoupt7bj3ep4hgmlyeyq"
+      OTEL_SERVICE_NAME: linker5-java
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
     steps:
       - name: Deploy to OCI VM
@@ -138,7 +144,7 @@ jobs:
             # Always (re)install the unit so ExecStart points at the deployed jar.
             # A pre-existing unit on the VM pointed elsewhere, so the old jar kept running.
             echo "Installing/updating linker.service unit..."
-            sudo tee /etc/systemd/system/linker.service > /dev/null <<'UNIT'
+            sudo tee /etc/systemd/system/linker.service > /dev/null <<UNIT
             [Unit]
             Description=Linker URL Shortener
             After=network-online.target
@@ -150,8 +156,14 @@ jobs:
             WorkingDirectory=/home/ubuntu
             Environment=PORT=8080
             Environment=LINKER_LOG_LEVEL=INFO
-            Environment=LINKER_OTEL_LOG_EXPORT=false
+            Environment=LINKER_OTEL_LOG_EXPORT=true
             Environment=FEATURE_REDIRECTS_ENABLED=true
+            Environment=OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}
+            Environment=OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL}
+            Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT}
+            Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT}
+            Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT}
+            Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}"
             ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
             Restart=always
             RestartSec=5
