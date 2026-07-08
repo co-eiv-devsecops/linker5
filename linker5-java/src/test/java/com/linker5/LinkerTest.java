@@ -1,7 +1,6 @@
 package com.linker5;
 
 import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class LinkerTest {
@@ -10,6 +9,8 @@ class LinkerTest {
     void shouldProvideTheDatabaseConnectionString() {
         Linker linker = new Linker();
 
-        assertEquals("jdbc:sqlite:linker.db", linker.getDatabaseConnectionString());
+        String expectedUrl = "jdbc:mysql://10.0.65.126:3306/linker_db_5?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+
+        assertEquals(expectedUrl, linker.getDatabaseConnectionString());
     }
 }

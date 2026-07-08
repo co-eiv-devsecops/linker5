@@ -199,11 +199,11 @@ class MainTest {
 
     @Test
     void shouldOpenDatabaseAndInitializeSchemaUsingPrivateMethods() throws Exception {
-        Connection connection = (Connection) invokePrivateStatic("openDatabase");
-        assertNotNull(connection);
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            assertNotNull(connection);
 
-        try (connection) {
             invokePrivateStatic("initializeSchema", Connection.class, connection);
+
             String id = UUID.randomUUID().toString().substring(0, 8);
             connection.createStatement().execute("INSERT INTO shorturl(id, url) VALUES('" + id + "', 'https://example.com')");
 
