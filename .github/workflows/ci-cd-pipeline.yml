@@ -111,7 +111,7 @@ jobs:
       OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
       OCI_INSTANCE_OCID: "ocid1.instance.oc1.sa-bogota-1.anrgcljrlthnxiycwliveenfuav6tnjnwuozz76dpoupt7bj3ep4hgmlyeyq"
       OTEL_SERVICE_NAME: linker5-java
-      OTEL_EXPORTER_OTLP_PROTOCOL: http
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
