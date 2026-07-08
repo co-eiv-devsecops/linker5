@@ -74,6 +74,10 @@ public class Main {
                 status = serveStatic(ex, path.substring(1));
                 return;
             }
+            if (path.equals("/healthz")) {
+                status = healthz(ex);
+                return;
+            }
             status = redirect(ex, path.substring(1));
         } catch (Exception exception) {
             Observability.get().markError(requestSpan, exception);
@@ -128,6 +132,32 @@ public class Main {
             Observability.get().markError(span, exception);
             logError("Short link creation failed", exception);
             throw exception;
+        } finally {
+            span.end();
+        }
+    }
+
+    private static int healthz(HttpExchange ex) throws IOException {
+        Span span = Observability.get().startChildSpan("healthcheck");
+        try (Scope ignored = span.makeCurrent()) {
+            long dbStart = System.nanoTime();
+            PreparedStatement st = db.prepareStatement("SELECT 1");
+            ResultSet rs = st.executeQuery();
+            boolean ok = rs.next();
+            Observability.get().recordDatabaseOperation("SELECT", elapsedMillis(dbStart));
+            span.setAttribute("linker.healthcheck.result", ok ? "ok" : "fail");
+
+            if (ok) {
+                send(ex, 200, "{\"status\":\"ok\"}", "application/json");
+                return 200;
+            }
+            send(ex, 500, "{\"status\":\"fail\"}", "application/json");
+            return 500;
+        } catch (Exception exception) {
+            Observability.get().markError(span, exception);
+            logError("Healthcheck failed", exception);
+            send(ex, 500, "{\"status\":\"fail\"}", "application/json");
+            return 500;
         } finally {
             span.end();
         }
@@ -203,7 +233,20 @@ public class Main {
     private static Connection openDatabase() throws Exception {
         logInfo("Opening database connection");
         try {
-            Connection connection = DriverManager.getConnection(LINKER.getDatabaseConnectionString());
+            String url = LINKER.getDatabaseConnectionString();
+            String user = LINKER.getDatabaseUser();
+            String password = LINKER.getDatabasePassword();
+
+            if (url.startsWith("jdbc:mysql:")) {
+                Class.forName("com.mysql.cj.jdbc.Driver");
+            } else if (url.startsWith("jdbc:sqlite:")) {
+                Class.forName("org.sqlite.JDBC");
+            }
+
+            Connection connection = (user != null && !user.isBlank())
+                    ? DriverManager.getConnection(url, user, password)
+                    : DriverManager.getConnection(url);
+
             Observability.get().setDatabaseConnected(true);
             return connection;
         } catch (Exception exception) {
@@ -217,7 +260,7 @@ public class Main {
         Span span = Observability.get().startChildSpan("db.initialize_schema");
         long dbStart = System.nanoTime();
         try (Scope ignored = span.makeCurrent()) {
-            database.createStatement().execute("CREATE TABLE IF NOT EXISTS shorturl(id TEXT PRIMARY KEY, url TEXT NOT NULL)");
+            database.createStatement().execute("CREATE TABLE IF NOT EXISTS shorturl(id VARCHAR(64) PRIMARY KEY, url TEXT NOT NULL)");
             Observability.get().recordDatabaseOperation("CREATE_TABLE", elapsedMillis(dbStart));
         } catch (Exception exception) {
             Observability.get().markError(span, exception);
@@ -241,6 +284,9 @@ public class Main {
     }
 
     private static String resolveRoute(String path, String method) {
+        if (path.equals("/healthz")) {
+            return "healthcheck";
+        }
         if (path.equals("/link") && method.equalsIgnoreCase("POST")) {
             return "create-short-link";
         }
