@@ -30,9 +30,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MainTest {
 
+    private static void setMainRedirectHandler(RedirectHandler handler) throws Exception {
+        Field handlerField = Main.class.getDeclaredField("redirectHandler");
+        handlerField.setAccessible(true);
+        handlerField.set(null, handler);
+    }
+    private static FeatureFlagProvider alwaysEnabled() {
+        return flagName -> true;
+    }
     @AfterEach
     void clearDatabaseField() throws Exception {
         setMainDatabase(null);
+        setMainRedirectHandler(null);
     }
 
     @Test
@@ -124,9 +133,9 @@ class MainTest {
             repository.initializeSchema(connection);
             repository.save(connection, "abc12345", "https://example.com/target");
             setMainDatabase(connection);
+            setMainRedirectHandler(new RedirectHandler(repository, alwaysEnabled()));
 
             FakeHttpExchange exchange = new FakeHttpExchange("GET", "/abc12345", "", "localhost:8080");
-
             invokeHandle(exchange);
 
             assertEquals(302, exchange.statusCode);
@@ -139,9 +148,9 @@ class MainTest {
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
             new LinkRepository().initializeSchema(connection);
             setMainDatabase(connection);
+            setMainRedirectHandler(new RedirectHandler(new LinkRepository(), new EnvFeatureFlagProvider()));
 
             FakeHttpExchange exchange = new FakeHttpExchange("GET", "/missing-id", "", "localhost:8080");
-
             invokeHandle(exchange);
 
             assertEquals(404, exchange.statusCode);
@@ -202,6 +211,16 @@ class MainTest {
             assertTrue(resultSet.next());
             assertEquals("https://example.com", resultSet.getString("url"));
         }
+    }
+
+
+
+
+    @Test
+    void shouldFallBackToEnvProviderWhenLaunchDarklyKeyIsMissing() {
+        assertTrue(Main.createFeatureFlagProvider(null) instanceof EnvFeatureFlagProvider);
+        assertTrue(Main.createFeatureFlagProvider("") instanceof EnvFeatureFlagProvider);
+        assertTrue(Main.createFeatureFlagProvider("   ") instanceof EnvFeatureFlagProvider);
     }
 
     private static void invokeHandle(FakeHttpExchange exchange) throws Exception {

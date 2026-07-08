@@ -7,7 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Scope;
-
+import java.util.Optional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -28,6 +28,7 @@ public class Main {
     private static final Linker LINKER = new Linker();
     private static final Logger LOG = Logger.getLogger(Main.class.getName());
     private static Connection db;
+    private static RedirectHandler redirectHandler;
 
     public static void main(String[] args) throws Exception {
         RuntimeConfig config = RuntimeConfig.load();
@@ -38,6 +39,10 @@ public class Main {
         try {
             db = openDatabase();
             initializeSchema(db);
+
+            FeatureFlagProvider featureFlagProvider = createFeatureFlagProvider(System.getenv("LAUNCHDARKLY_SDK_KEY"));
+            redirectHandler = new RedirectHandler(new LinkRepository(), featureFlagProvider);
+
             HttpServer server = HttpServer.create(new InetSocketAddress(config.port()), 0);
             server.createContext("/", Main::handle);
             server.start();
@@ -47,6 +52,18 @@ public class Main {
             logFatal("No se pudo iniciar Linker", exception);
             throw exception;
         }
+    }
+
+    // Choose the feature flag backend based on configuration: LaunchDarkly when an
+    // SDK key is present, otherwise the environment-variable provider. This keeps the
+    // app deployable without LaunchDarkly configured instead of crashing at startup.
+    static FeatureFlagProvider createFeatureFlagProvider(String launchDarklySdkKey) {
+        if (launchDarklySdkKey != null && !launchDarklySdkKey.isBlank()) {
+            LOG.info("[Info] Using LaunchDarkly feature flag provider");
+            return new LaunchDarklyFeatureFlagProvider();
+        }
+        LOG.warning("[Warn] LAUNCHDARKLY_SDK_KEY not set; using environment feature flag provider");
+        return new EnvFeatureFlagProvider();
     }
 
     private static void handle(HttpExchange ex) throws IOException {
@@ -168,26 +185,26 @@ public class Main {
         try (Scope ignored = span.makeCurrent()) {
             logDebug("Redirect lookup requested for id=" + id);
             Span lookupSpan = Observability.get().startChildSpan("db.select_short_url");
+            Optional<String> redirectUrl;
             try (Scope lookupScope = lookupSpan.makeCurrent()) {
                 long dbStart = System.nanoTime();
-                PreparedStatement st = db.prepareStatement("SELECT url FROM shorturl WHERE id=?");
-                st.setString(1, id);
-                ResultSet rs = st.executeQuery();
+                redirectUrl = redirectHandler.resolveRedirect(id, db);
                 Observability.get().recordDatabaseOperation("SELECT", elapsedMillis(dbStart));
-                if (rs.next()) {
-                    String target = rs.getString("url");
-                    span.setAttribute("linker.short_id", id);
-                    logInfo("Redirect success: id=" + id + " -> " + target);
-                    ex.getResponseHeaders().add("Location", target);
-                    ex.sendResponseHeaders(302, -1);
-                    ex.close();
-                    return 302;
-                }
             } catch (Exception exception) {
                 Observability.get().markError(lookupSpan, exception);
                 throw exception;
             } finally {
                 lookupSpan.end();
+            }
+
+            if (redirectUrl.isPresent()) {
+                String target = redirectUrl.get();
+                span.setAttribute("linker.short_id", id);
+                logInfo("Redirect success: id=" + id + " -> " + target);
+                ex.getResponseHeaders().add("Location", target);
+                ex.sendResponseHeaders(302, -1);
+                ex.close();
+                return 302;
             }
 
             logWarn("Redirect not found for id=" + id);
