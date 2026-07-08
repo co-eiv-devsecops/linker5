@@ -83,6 +83,8 @@ The SDK is also prepared to export telemetry through **OTLP** using environment 
 Supported variables:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT` — common OTLP endpoint
+- `OTEL_EXPORTER_OTLP_PROTOCOL` — use `http/protobuf` for direct Grafana Cloud export
+- `OTEL_EXPORTER_OTLP_HEADERS` — optional OTLP headers, e.g. `Authorization=Basic%20<token>`
 - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` — optional trace-specific endpoint
 - `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` — optional metrics-specific endpoint
 - `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` — optional logs-specific endpoint
@@ -96,11 +98,15 @@ Behavior:
 Example for a local collector:
 
 ```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic%20<token>" \
 LINKER_OTEL_LOG_EXPORT=true \
 LINKER_LOG_LEVEL=INFO \
 java -jar target/*-jar-with-dependencies.jar
 ```
+
+For direct Grafana Cloud OTLP, header values should be URL-encoded, so `Basic ` becomes `Basic%20`.
 
 Create a short link:
 

@@ -10,6 +10,7 @@ public record RuntimeConfig(
         String serviceName,
         boolean otelLogExportEnabled,
         Optional<String> otlpEndpoint,
+        Optional<String> otlpHeaders,
         Optional<String> otlpTracesEndpoint,
         Optional<String> otlpMetricsEndpoint,
         Optional<String> otlpLogsEndpoint
@@ -22,6 +23,7 @@ public record RuntimeConfig(
                 resolveString("otel.service.name", "OTEL_SERVICE_NAME", "linker5-java"),
                 resolveBoolean("linker.otel.logs.enabled", "LINKER_OTEL_LOG_EXPORT", false),
                 resolveOptionalString("otel.exporter.otlp.endpoint", "OTEL_EXPORTER_OTLP_ENDPOINT"),
+                resolveOptionalString("otel.exporter.otlp.headers", "OTEL_EXPORTER_OTLP_HEADERS"),
                 resolveOptionalString("otel.exporter.otlp.traces.endpoint", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"),
                 resolveOptionalString("otel.exporter.otlp.metrics.endpoint", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
                 resolveOptionalString("otel.exporter.otlp.logs.endpoint", "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")

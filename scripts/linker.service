@@ -9,9 +9,13 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu
 Environment=PORT=8080
 Environment=LINKER_LOG_LEVEL=INFO
-Environment=LINKER_OTEL_LOG_EXPORT=false
-# Uncomment and point to your collector when OTLP export is needed.
-# Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+Environment=LINKER_OTEL_LOG_EXPORT=true
+Environment=OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+Environment=OTEL_SERVICE_NAME=linker5-java
+Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+# Environment=OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<TU_TOKEN>
 ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
 Restart=always
 RestartSec=5

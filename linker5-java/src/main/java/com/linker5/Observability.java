@@ -16,9 +16,9 @@ import io.opentelemetry.context.Scope;
 import io.opentelemetry.exporter.logging.LoggingMetricExporter;
 import io.opentelemetry.exporter.logging.LoggingSpanExporter;
 import io.opentelemetry.exporter.logging.SystemOutLogRecordExporter;
-import io.opentelemetry.exporter.otlp.logs.OtlpGrpcLogRecordExporter;
-import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
-import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
+import io.opentelemetry.exporter.otlp.http.logs.OtlpHttpLogRecordExporter;
+import io.opentelemetry.exporter.otlp.http.metrics.OtlpHttpMetricExporter;
+import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.OpenTelemetrySdkBuilder;
 import io.opentelemetry.sdk.logs.SdkLoggerProvider;
@@ -33,6 +33,10 @@ import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 
 import java.time.Duration;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -170,26 +174,80 @@ public final class Observability implements AutoCloseable {
         global = new Observability(builder.buildAndRegisterGlobal());
     }
 
-    private static OtlpGrpcSpanExporter buildSpanExporter(RuntimeConfig config) {
-        var builder = OtlpGrpcSpanExporter.builder();
+    private static OtlpHttpSpanExporter buildSpanExporter(RuntimeConfig config) {
+        var builder = OtlpHttpSpanExporter.builder();
         resolveEndpoint(config.otlpTracesEndpoint(), config.otlpEndpoint()).ifPresent(builder::setEndpoint);
+        applyHeaders(builder, config.otlpHeaders());
         return builder.build();
     }
 
-    private static OtlpGrpcMetricExporter buildMetricExporter(RuntimeConfig config) {
-        var builder = OtlpGrpcMetricExporter.builder();
+    private static OtlpHttpMetricExporter buildMetricExporter(RuntimeConfig config) {
+        var builder = OtlpHttpMetricExporter.builder();
         resolveEndpoint(config.otlpMetricsEndpoint(), config.otlpEndpoint()).ifPresent(builder::setEndpoint);
+        applyHeaders(builder, config.otlpHeaders());
         return builder.build();
     }
 
-    private static OtlpGrpcLogRecordExporter buildLogExporter(RuntimeConfig config) {
-        var builder = OtlpGrpcLogRecordExporter.builder();
+    private static OtlpHttpLogRecordExporter buildLogExporter(RuntimeConfig config) {
+        var builder = OtlpHttpLogRecordExporter.builder();
         resolveEndpoint(config.otlpLogsEndpoint(), config.otlpEndpoint()).ifPresent(builder::setEndpoint);
+        applyHeaders(builder, config.otlpHeaders());
         return builder.build();
     }
 
     private static Optional<String> resolveEndpoint(Optional<String> signalSpecific, Optional<String> common) {
         return signalSpecific.isPresent() ? signalSpecific : common;
+    }
+
+    static Map<String, String> parseOtlpHeaders(Optional<String> rawHeaders) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        if (rawHeaders.isEmpty()) {
+            return headers;
+        }
+
+        for (String entry : rawHeaders.get().split(",")) {
+            String trimmedEntry = entry.trim();
+            if (trimmedEntry.isEmpty()) {
+                continue;
+            }
+
+            int separatorIndex = trimmedEntry.indexOf('=');
+            if (separatorIndex <= 0 || separatorIndex == trimmedEntry.length() - 1) {
+                continue;
+            }
+
+            String key = trimmedEntry.substring(0, separatorIndex).trim();
+            String value = trimmedEntry.substring(separatorIndex + 1).trim();
+            if (!key.isEmpty() && !value.isEmpty()) {
+                headers.put(key, URLDecoder.decode(value, StandardCharsets.UTF_8));
+            }
+        }
+
+        return headers;
+    }
+
+    private static void applyHeaders(OtlpHeaderBuilderAdapter builder, Optional<String> rawHeaders) {
+        parseOtlpHeaders(rawHeaders).forEach(builder::setHeader);
+    }
+
+    private static void applyHeaders(io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporterBuilder builder,
+                                     Optional<String> rawHeaders) {
+        applyHeaders(builder::addHeader, rawHeaders);
+    }
+
+    private static void applyHeaders(io.opentelemetry.exporter.otlp.http.metrics.OtlpHttpMetricExporterBuilder builder,
+                                     Optional<String> rawHeaders) {
+        applyHeaders(builder::addHeader, rawHeaders);
+    }
+
+    private static void applyHeaders(io.opentelemetry.exporter.otlp.http.logs.OtlpHttpLogRecordExporterBuilder builder,
+                                     Optional<String> rawHeaders) {
+        applyHeaders(builder::addHeader, rawHeaders);
+    }
+
+    @FunctionalInterface
+    private interface OtlpHeaderBuilderAdapter {
+        void setHeader(String key, String value);
     }
 
     public static Observability get() {
