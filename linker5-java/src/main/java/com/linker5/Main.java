@@ -231,17 +231,17 @@ public class Main {
     }
 
     private static Connection openDatabase() throws Exception {
-        logInfo("Opening database connection");
+        logInfo("Opening database connection (MySQL strictly required)");
         try {
             String url = LINKER.getDatabaseConnectionString();
             String user = LINKER.getDatabaseUser();
             String password = LINKER.getDatabasePassword();
 
-            if (url.startsWith("jdbc:mysql:")) {
-                Class.forName("com.mysql.cj.jdbc.Driver");
-            } else if (url.startsWith("jdbc:sqlite:")) {
-                Class.forName("org.sqlite.JDBC");
+            if (url == null || !url.startsWith("jdbc:mysql:")) {
+                throw new IllegalArgumentException("Invalid database URL. Strictly expecting a 'jdbc:mysql:' connection string.");
             }
+
+            Class.forName("com.mysql.cj.jdbc.Driver");
 
             Connection connection = (user != null && !user.isBlank())
                     ? DriverManager.getConnection(url, user, password)
@@ -250,7 +250,7 @@ public class Main {
             Observability.get().setDatabaseConnected(true);
             return connection;
         } catch (Exception exception) {
-            logFatal("Database connection could not be opened", exception);
+            logFatal("MySQL database connection could not be opened", exception);
             throw exception;
         }
     }
