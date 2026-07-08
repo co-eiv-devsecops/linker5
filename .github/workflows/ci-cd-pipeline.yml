@@ -145,6 +145,37 @@ jobs:
             fi
             echo "Deploying artifact: $JAR"
 
+            OTEL_EXPORTER_OTLP_HEADERS_VALUE=$(cat <<'EOF'
+            ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+            EOF
+            )
+            MYSQL_HOST_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_HOST }}
+            EOF
+            )
+            MYSQL_DATABASE_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_DATABASE }}
+            EOF
+            )
+            MYSQL_USER_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_USER }}
+            EOF
+            )
+            MYSQL_PWD_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_PWD }}
+            EOF
+            )
+
+            escape_systemd_value() {
+              printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+            }
+
+            OTEL_EXPORTER_OTLP_HEADERS_ESCAPED="$(escape_systemd_value "$OTEL_EXPORTER_OTLP_HEADERS_VALUE")"
+            MYSQL_HOST_ESCAPED="$(escape_systemd_value "$MYSQL_HOST_VALUE")"
+            MYSQL_DATABASE_ESCAPED="$(escape_systemd_value "$MYSQL_DATABASE_VALUE")"
+            MYSQL_USER_ESCAPED="$(escape_systemd_value "$MYSQL_USER_VALUE")"
+            MYSQL_PWD_ESCAPED="$(escape_systemd_value "$MYSQL_PWD_VALUE")"
+
             # Always (re)install the unit so ExecStart points at the deployed jar.
             # A pre-existing unit on the VM pointed elsewhere, so the old jar kept running.
             echo "Installing/updating linker.service unit..."
@@ -167,11 +198,11 @@ jobs:
             Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
             Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
             Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
-            Environment=OTEL_EXPORTER_OTLP_HEADERS=${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-            Environment=MYSQL_HOST=${{ secrets.MYSQL_HOST }}
-            Environment=MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
-            Environment=MYSQL_USER=${{ secrets.MYSQL_USER }}
-            Environment=MYSQL_PWD=${{ secrets.MYSQL_PWD }}
+            Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS_ESCAPED}"
+            Environment="MYSQL_HOST=${MYSQL_HOST_ESCAPED}"
+            Environment="MYSQL_DATABASE=${MYSQL_DATABASE_ESCAPED}"
+            Environment="MYSQL_USER=${MYSQL_USER_ESCAPED}"
+            Environment="MYSQL_PWD=${MYSQL_PWD_ESCAPED}"
             ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
             Restart=always
             RestartSec=5
