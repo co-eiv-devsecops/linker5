@@ -91,6 +91,9 @@ jobs:
       MYSQL_PWD: linker_test_pwd
       PORT: 8080
       LINKER_LOG_LEVEL: INFO
+      # deploy-prod turns this on for the real service; match it here so the
+      # ephemeral environment doesn't quietly diverge from production.
+      FEATURE_REDIRECTS_ENABLED: "true"
 
     steps:
       - name: Checkout repository
