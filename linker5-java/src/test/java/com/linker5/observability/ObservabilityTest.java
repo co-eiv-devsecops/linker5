@@ -1,4 +1,4 @@
-package com.linker5;
+package com.linker5.observability;
 
 import org.junit.jupiter.api.Test;
 
