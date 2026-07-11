@@ -74,6 +74,22 @@ class LinkerHttpHandlerTest {
     }
 
     @Test
+    void shouldRejectPostRequestMissingUrlField() throws Exception {
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            LinkRepository repository = new LinkRepository();
+            repository.initializeSchema(connection);
+            LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
+
+            FakeHttpExchange exchange = new FakeHttpExchange("POST", CREATE_LINK_PATH, "{}", LOCALHOST_HOST);
+            handler.handle(exchange);
+
+            assertEquals(400, exchange.statusCode);
+            assertEquals("{\"error\":\"Missing 'url'\"}", exchange.responseAsText());
+            assertEquals("application/json", exchange.getResponseHeaders().getFirst(CONTENT_TYPE_HEADER));
+        }
+    }
+
+    @Test
     void shouldServeHtmlAndAssets() throws Exception {
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(new LinkRepository()));
