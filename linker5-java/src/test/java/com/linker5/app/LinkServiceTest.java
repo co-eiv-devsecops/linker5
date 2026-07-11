@@ -99,6 +99,18 @@ class LinkServiceTest {
     }
 
     @Test
+    void shouldRejectRequestsMissingTheUrlField() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink("{}", LOCALHOST_HOST, connection));
+
+            assertEquals("Missing 'url'", exception.getMessage());
+        }
+    }
+
+    @Test
     void shouldReturnEmptyWhenShortLinkDoesNotExist() throws Exception {
         LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
 
