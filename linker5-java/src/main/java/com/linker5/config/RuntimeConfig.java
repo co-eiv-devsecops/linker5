@@ -1,4 +1,4 @@
-package com.linker5;
+package com.linker5.config;
 
 import java.util.Locale;
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package com.linker5;
+package com.linker5.flags;
 
 /**
  * Interface for feature flag evaluation.
