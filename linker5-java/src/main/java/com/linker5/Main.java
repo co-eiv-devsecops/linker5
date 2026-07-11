@@ -115,7 +115,14 @@ public class Main {
             Observability.get().recordRequestPayloadSize(body.getBytes(StandardCharsets.UTF_8).length);
             logDebug("Create short URL request body received");
 
-            String url = GSON.fromJson(body, JsonObject.class).get("url").getAsString();
+            JsonObject payload = GSON.fromJson(body, JsonObject.class);
+            if (!payload.has("url") || payload.get("url").isJsonNull()) {
+                logWarn("Missing 'url' in create request");
+                send(ex, 400, "{\"error\":\"Missing 'url'\"}", "application/json");
+                return 400;
+            }
+
+            String url = payload.get("url").getAsString();
             if (!URI.create(url).isAbsolute()) {
                 logWarn("Invalid URL received: " + url);
                 send(ex, 400, "{\"error\":\"Invalid URL\"}", "application/json");

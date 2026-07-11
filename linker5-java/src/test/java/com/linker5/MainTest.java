@@ -93,6 +93,27 @@ class MainTest {
     }
 
     @Test
+    void shouldRejectPostRequestMissingUrlField() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            new LinkRepository().initializeSchema(connection);
+            setMainDatabase(connection);
+
+            FakeHttpExchange exchange = new FakeHttpExchange(
+                    "POST",
+                    "/link",
+                    "{}",
+                    "localhost:8080"
+            );
+
+            invokeHandle(exchange);
+
+            assertEquals(400, exchange.statusCode);
+            assertEquals("{\"error\":\"Missing 'url'\"}", exchange.responseAsText());
+            assertEquals("application/json", exchange.getResponseHeaders().getFirst("Content-Type"));
+        }
+    }
+
+    @Test
     void shouldServeHtmlAndAssets() throws Exception {
         setMainDatabase(DriverManager.getConnection("jdbc:sqlite::memory:"));
 
