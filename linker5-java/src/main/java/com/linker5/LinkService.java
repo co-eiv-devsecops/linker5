@@ -76,6 +76,9 @@ public class LinkService {
 
     String extractUrl(String requestBody) {
         JsonObject payload = gson.fromJson(requestBody, JsonObject.class);
+        if (!payload.has("url") || payload.get("url").isJsonNull()) {
+            throw new IllegalArgumentException("Missing 'url'");
+        }
         return payload.get("url").getAsString();
     }
 
