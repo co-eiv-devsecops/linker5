@@ -9,9 +9,16 @@ import java.util.Optional;
 
 public class LinkRepository {
 
+    private static final String CREATE_SHORTURL_TABLE = """
+            CREATE TABLE IF NOT EXISTS shorturl(
+                id VARCHAR(64) PRIMARY KEY,
+                url TEXT NOT NULL
+            )
+            """;
+
     public void initializeSchema(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS shorturl(id TEXT PRIMARY KEY, url TEXT NOT NULL)");
+            statement.execute(CREATE_SHORTURL_TABLE);
         }
     }
 

@@ -214,7 +214,7 @@ jobs:
       DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
       OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
       OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
-      OCI_INSTANCE_OCID: "ocid1.instance.oc1.sa-bogota-1.anrgcljrlthnxiycwliveenfuav6tnjnwuozz76dpoupt7bj3ep4hgmlyeyq"
+      OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
       OTEL_SERVICE_NAME: linker5-java
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
