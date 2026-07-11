@@ -1,9 +1,8 @@
+package com.linker5.persistence;
 
-package com.linker5;
+public class DatabaseConfig {
 
-public class Linker {
-
-    public String getDatabaseConnectionString() {
+    public String getConnectionString() {
         String host = System.getenv("MYSQL_HOST");
         String database = System.getenv("MYSQL_DATABASE");
 

@@ -1,14 +1,20 @@
-package com.linker5;
+package com.linker5.app;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import org.sqlite.SQLiteException;
+import com.linker5.ids.ShortIdGenerator;
+import com.linker5.ids.UuidShortIdGenerator;
+import com.linker5.persistence.LinkRepository;
 
 import java.net.URI;
 import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.Optional;
 
 public class LinkService {
+
+    private static final String ALIAS_FIELD = "alias";
 
     private final Gson gson;
     private final LinkRepository repository;
@@ -31,7 +37,7 @@ public class LinkService {
         String id = resolveId(requestBody, connection);
         try {
             repository.save(connection, id, url);
-        } catch (SQLiteException exception) {
+        } catch (SQLException exception) {
             if (isDuplicateShortLinkId(exception)) {
                 throw new IllegalArgumentException("Short link id already exists");
             }
@@ -41,7 +47,10 @@ public class LinkService {
         return new CreateLinkResult(id, buildShortUrl(host, id));
     }
 
-    boolean isDuplicateShortLinkId(SQLiteException exception) {
+    boolean isDuplicateShortLinkId(SQLException exception) {
+        if (exception instanceof SQLIntegrityConstraintViolationException) {
+            return true;
+        }
         return exception.getMessage() != null && exception.getMessage().contains("UNIQUE constraint failed: shorturl.id");
     }
 
@@ -63,8 +72,8 @@ public class LinkService {
 
     Optional<String> extractAlias(String requestBody) {
         JsonObject payload = gson.fromJson(requestBody, JsonObject.class);
-        if (payload.has("alias") && !payload.get("alias").isJsonNull()) {
-            return Optional.of(payload.get("alias").getAsString());
+        if (payload.has(ALIAS_FIELD) && !payload.get(ALIAS_FIELD).isJsonNull()) {
+            return Optional.of(payload.get(ALIAS_FIELD).getAsString());
         }
         return Optional.empty();
     }

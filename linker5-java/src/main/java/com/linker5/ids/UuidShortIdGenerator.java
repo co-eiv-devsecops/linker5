@@ -1,4 +1,4 @@
-package com.linker5;
+package com.linker5.ids;
 
 import java.util.UUID;
 

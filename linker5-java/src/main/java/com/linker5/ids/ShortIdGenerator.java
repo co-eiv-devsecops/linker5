@@ -1,4 +1,4 @@
-package com.linker5;
+package com.linker5.ids;
 
 @FunctionalInterface
 public interface ShortIdGenerator {

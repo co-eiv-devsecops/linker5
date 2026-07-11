@@ -1,4 +1,6 @@
-package com.linker5;
+package com.linker5.observability;
+
+import com.linker5.config.RuntimeConfig;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
@@ -39,11 +41,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class Observability implements AutoCloseable {
 
+    private static final String NOOP_INSTRUMENTATION_NAME = "com.linker5.noop";
+    private static final String OBSERVABILITY_INSTRUMENTATION_NAME = "com.linker5.observability";
     private static final Observability NOOP = new Observability();
-    private static volatile Observability global = NOOP;
+    private static final AtomicReference<Observability> GLOBAL = new AtomicReference<>(NOOP);
 
     private static final AttributeKey<String> ROUTE = AttributeKey.stringKey("linker.route");
     private static final AttributeKey<String> METHOD = AttributeKey.stringKey("http.request.method");
@@ -69,9 +74,9 @@ public final class Observability implements AutoCloseable {
     private Observability() {
         this.sdk = null;
         OpenTelemetry noop = OpenTelemetry.noop();
-        this.tracer = noop.getTracer("com.linker5.noop");
-        this.meter = noop.getMeter("com.linker5.noop");
-        this.otelLogger = noop.getLogsBridge().get("com.linker5.noop");
+        this.tracer = noop.getTracer(NOOP_INSTRUMENTATION_NAME);
+        this.meter = noop.getMeter(NOOP_INSTRUMENTATION_NAME);
+        this.otelLogger = noop.getLogsBridge().get(NOOP_INSTRUMENTATION_NAME);
         this.inFlightRequests = new AtomicInteger();
         this.activeDbConnections = new AtomicInteger();
         this.requestCounter = null;
@@ -86,9 +91,9 @@ public final class Observability implements AutoCloseable {
 
     private Observability(OpenTelemetrySdk sdk) {
         this.sdk = sdk;
-        this.tracer = sdk.getTracer("com.linker5.observability");
-        this.meter = sdk.getMeter("com.linker5.observability");
-        this.otelLogger = GlobalOpenTelemetry.get().getLogsBridge().get("com.linker5.observability");
+        this.tracer = sdk.getTracer(OBSERVABILITY_INSTRUMENTATION_NAME);
+        this.meter = sdk.getMeter(OBSERVABILITY_INSTRUMENTATION_NAME);
+        this.otelLogger = GlobalOpenTelemetry.get().getLogsBridge().get(OBSERVABILITY_INSTRUMENTATION_NAME);
         this.inFlightRequests = new AtomicInteger();
         this.activeDbConnections = new AtomicInteger();
         this.requestCounter = meter.counterBuilder("linker.http.requests.total")
@@ -171,7 +176,7 @@ public final class Observability implements AutoCloseable {
             builder.setLoggerProvider(loggerProvider.build());
         }
 
-        global = new Observability(builder.buildAndRegisterGlobal());
+        GLOBAL.set(new Observability(builder.buildAndRegisterGlobal()));
     }
 
     private static OtlpHttpSpanExporter buildSpanExporter(RuntimeConfig config) {
@@ -207,18 +212,17 @@ public final class Observability implements AutoCloseable {
 
         for (String entry : rawHeaders.get().split(",")) {
             String trimmedEntry = entry.trim();
-            if (trimmedEntry.isEmpty()) {
-                continue;
-            }
-
             int separatorIndex = trimmedEntry.indexOf('=');
-            if (separatorIndex <= 0 || separatorIndex == trimmedEntry.length() - 1) {
-                continue;
-            }
+            boolean hasKeyValuePair = !trimmedEntry.isEmpty()
+                    && separatorIndex > 0
+                    && separatorIndex < trimmedEntry.length() - 1;
 
-            String key = trimmedEntry.substring(0, separatorIndex).trim();
-            String value = trimmedEntry.substring(separatorIndex + 1).trim();
-            if (!key.isEmpty() && !value.isEmpty()) {
+            if (hasKeyValuePair) {
+                String key = trimmedEntry.substring(0, separatorIndex).trim();
+                String value = trimmedEntry.substring(separatorIndex + 1).trim();
+                if (key.isEmpty() || value.isEmpty()) {
+                    continue;
+                }
                 headers.put(key, URLDecoder.decode(value, StandardCharsets.UTF_8));
             }
         }
@@ -251,16 +255,15 @@ public final class Observability implements AutoCloseable {
     }
 
     public static Observability get() {
-        return global;
+        return GLOBAL.get();
     }
 
     public Span startServerSpan(String method, String path) {
-        Span span = tracer.spanBuilder("http.request")
+        return tracer.spanBuilder("http.request")
                 .setSpanKind(SpanKind.SERVER)
                 .setAttribute("http.request.method", method)
                 .setAttribute("url.path", path)
                 .startSpan();
-        return span;
     }
 
     public Span startChildSpan(String name) {
