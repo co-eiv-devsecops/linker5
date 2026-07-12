@@ -1,19 +1,11 @@
 package com.linker5.http;
 
-import com.google.gson.Gson;
-import com.linker5.app.LinkService;
-import com.linker5.app.Linker;
+import com.linker5.app.LinkerUseCases;
 import com.linker5.config.RuntimeConfig;
 import com.linker5.flags.EnvFeatureFlagProvider;
 import com.linker5.flags.FeatureFlagProvider;
 import com.linker5.flags.LaunchDarklyFeatureFlagProvider;
-import com.linker5.ids.UuidShortIdGenerator;
 import com.linker5.observability.AppObservability;
-import com.linker5.observability.Observability;
-import com.linker5.observability.OpenTelemetryAppObservability;
-import com.linker5.persistence.DatabaseConfig;
-import com.linker5.persistence.LinkRepository;
-import com.linker5.redirect.RedirectHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.Span;
@@ -28,36 +20,27 @@ import java.util.logging.Logger;
 
 public class Main {
 
-    private static final Gson GSON = new Gson();
-    private static final DatabaseConfig DATABASE_CONFIG = new DatabaseConfig();
     private static final Logger LOG = Logger.getLogger(Main.class.getName());
 
     public static void main(String[] args) throws Exception {
-        RuntimeConfig config = RuntimeConfig.load();
-        configureLogging(config.logLevel());
-        Observability.initialize(config);
-        AppObservability observability = new OpenTelemetryAppObservability(Observability.get());
-        Runtime.getRuntime().addShutdownHook(new Thread(observability::close));
+        LinkerApplicationRuntime runtime = LinkerApplicationRuntime.initialize();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                runtime.close();
+            } catch (Exception ignored) {
+                // Best-effort shutdown cleanup.
+            }
+        }));
 
         try {
-            Connection db = openDatabase(observability);
-            FeatureFlagProvider featureFlagProvider = createFeatureFlagProvider(System.getenv("LAUNCHDARKLY_SDK_KEY"));
-            LinkRepository repository = new LinkRepository();
-            Linker linker = new Linker(
-                    new LinkService(GSON, repository, new UuidShortIdGenerator()),
-                    new RedirectHandler(repository, featureFlagProvider),
-                    repository
-            );
-            initializeSchema(db, linker, observability);
-
-            HttpServer server = HttpServer.create(new InetSocketAddress(config.port()), 0);
-            server.createContext("/", new LinkerHttpHandler(linker, db, observability, GSON, LOG));
+            HttpServer server = HttpServer.create(new InetSocketAddress(runtime.config().port()), 0);
+            server.createContext("/", new LinkerHttpHandler(runtime.linker(), runtime.db(), runtime.observability(), runtime.gson(), LOG));
             server.start();
 
-            emitInfo(observability, "Linker escuchando en el puerto " + config.port());
-            emitInfo(observability, "OpenTelemetry inicializado para el servicio " + config.serviceName());
+            emitInfo(runtime.observability(), "Linker escuchando en el puerto " + runtime.config().port());
+            emitInfo(runtime.observability(), "OpenTelemetry inicializado para el servicio " + runtime.config().serviceName());
         } catch (Exception exception) {
-            emitFatal(observability, "No se pudo iniciar Linker", exception);
+            emitFatal(runtime.observability(), "No se pudo iniciar Linker", exception);
             throw exception;
         }
     }
@@ -74,9 +57,10 @@ public class Main {
     static Connection openDatabase(AppObservability observability) throws Exception {
         emitInfo(observability, "Opening database connection (MySQL strictly required)");
         try {
-            String url = DATABASE_CONFIG.getConnectionString();
-            String user = DATABASE_CONFIG.getDatabaseUser();
-            String password = DATABASE_CONFIG.getDatabasePassword();
+            com.linker5.persistence.DatabaseConfig databaseConfig = new com.linker5.persistence.DatabaseConfig();
+            String url = databaseConfig.getConnectionString();
+            String user = databaseConfig.getDatabaseUser();
+            String password = databaseConfig.getDatabasePassword();
 
             if (url == null || !url.startsWith("jdbc:mysql:")) {
                 throw new IllegalArgumentException("Invalid database URL. Strictly expecting a 'jdbc:mysql:' connection string.");
@@ -96,7 +80,7 @@ public class Main {
         }
     }
 
-    static void initializeSchema(Connection database, Linker linker, AppObservability observability) throws Exception {
+    static void initializeSchema(Connection database, LinkerUseCases linker, AppObservability observability) throws Exception {
         emitInfo(observability, "Initializing database schema");
         Span span = observability.startChildSpan("db.initialize_schema");
         long dbStart = System.nanoTime();

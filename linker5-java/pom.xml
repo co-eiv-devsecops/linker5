@@ -17,6 +17,11 @@
 
         <javalin.version>6.7.0</javalin.version>
         <sqlite.version>3.50.3.0</sqlite.version>
+        <azure.functions.maven.plugin.version>1.39.0</azure.functions.maven.plugin.version>
+        <azure.functions.java.library.version>3.2.0</azure.functions.java.library.version>
+        <azure.functions.appName>${env.AZURE_FUNCTION_APP_NAME}</azure.functions.appName>
+        <azure.functions.resourceGroup>${env.AZURE_RESOURCE_GROUP}</azure.functions.resourceGroup>
+        <azure.functions.region>${env.AZURE_REGION}</azure.functions.region>
     </properties>
 <dependencies>
 
@@ -46,6 +51,12 @@
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
         <version>2.13.1</version>
+    </dependency>
+
+    <dependency>
+        <groupId>com.microsoft.azure.functions</groupId>
+        <artifactId>azure-functions-java-library</artifactId>
+        <version>${azure.functions.java.library.version}</version>
     </dependency>
 
     <dependency>
@@ -144,9 +155,30 @@
             </plugin>
 
             <plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-surefire-plugin</artifactId>
-    <version>3.5.2</version>
+                <groupId>com.microsoft.azure</groupId>
+                <artifactId>azure-functions-maven-plugin</artifactId>
+                <version>${azure.functions.maven.plugin.version}</version>
+                <configuration>
+                    <appName>${azure.functions.appName}</appName>
+                    <resourceGroup>${azure.functions.resourceGroup}</resourceGroup>
+                    <region>${azure.functions.region}</region>
+                    <runtime>
+                        <os>linux</os>
+                        <javaVersion>21</javaVersion>
+                    </runtime>
+                    <appSettings>
+                        <property>
+                            <name>FUNCTIONS_EXTENSION_VERSION</name>
+                            <value>~4</value>
+                        </property>
+                    </appSettings>
+                </configuration>
+            </plugin>
+
+            <plugin>
+     <groupId>org.apache.maven.plugins</groupId>
+     <artifactId>maven-surefire-plugin</artifactId>
+     <version>3.5.2</version>
     <configuration>
         <argLine>${argLine}</argLine>
     </configuration>

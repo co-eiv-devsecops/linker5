@@ -1,6 +1,5 @@
 package com.linker5.app;
 
-import com.google.gson.Gson;
 import com.linker5.persistence.LinkRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,7 +21,9 @@ class LinkServiceTest {
     private static final String GENERATED_SHORT_LINK_ID = "abcd1234";
     private static final String GENERATED_ALIAS_FALLBACK_ID = "generated-id";
     private static final String IN_MEMORY_SQLITE_URL = "jdbc:sqlite::memory:";
-    private static final String LOCALHOST_HOST = "localhost:8080";
+    private static final String LOCALHOST_PUBLIC_BASE_URL = "http://localhost:8080";
+    private static final String EXAMPLE_URL = "https://example.com";
+    private static final String INVALID_URL_MESSAGE = "Invalid URL";
 
     private final LinkRepository repository = new LinkRepository();
 
@@ -33,8 +34,7 @@ class LinkServiceTest {
         @ParameterizedTest(name = "When_ShortLinkIdIsBlank_Expect_IllegalArgumentException [{index}]")
         @ValueSource(strings = {"", " ", "   ", "\t"})
         void shouldRejectBlankShortLinkId(String shortLinkId) throws Exception {
-
-            LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+            LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
             try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
                 repository.initializeSchema(connection);
@@ -52,20 +52,17 @@ class LinkServiceTest {
     class WhenGeneratedShortLinkIdAlreadyExists {
 
         @ParameterizedTest(name = "When_GeneratedShortLinkIdAlreadyExists_Expect_ClearFailure [{index}]")
-        @ValueSource(strings = {"https://example.com", "https://escuelaing.edu.co"})
+        @ValueSource(strings = {EXAMPLE_URL, "https://escuelaing.edu.co"})
         void shouldFailWhenGeneratedShortLinkIdAlreadyExists(String url) throws Exception {
-            // Arrange
-            LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+            LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
             try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
                 repository.initializeSchema(connection);
                 repository.save(connection, GENERATED_SHORT_LINK_ID, "https://existing-link.com");
 
-                // Act
                 IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                        service.createShortLink("{\"url\":\"" + url + "\"}", LOCALHOST_HOST, connection));
+                        service.createShortLink(request(url), connection));
 
-                // Assert
                 assertEquals("Short link id already exists", exception.getMessage());
             }
         }
@@ -73,28 +70,28 @@ class LinkServiceTest {
 
     @Test
     void shouldCreateShortLinkUsingTheProvidedDependencies() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
 
-            CreateLinkResult result = service.createShortLink("{\"url\":\"https://example.com\"}", LOCALHOST_HOST, connection);
+            CreateLinkResult result = service.createShortLink(request(EXAMPLE_URL), connection);
 
             assertEquals(GENERATED_SHORT_LINK_ID, result.id());
-            assertEquals("http://" + LOCALHOST_HOST + "/" + GENERATED_SHORT_LINK_ID, result.shortUrl());
-            assertEquals(Optional.of("https://example.com"), service.resolveShortLink(GENERATED_SHORT_LINK_ID, connection));
+            assertEquals(LOCALHOST_PUBLIC_BASE_URL + "/" + GENERATED_SHORT_LINK_ID, result.shortUrl());
+            assertEquals(Optional.of(EXAMPLE_URL), service.resolveShortLink(GENERATED_SHORT_LINK_ID, connection));
         }
     }
 
     @Test
     void shouldRejectRelativeUrls() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink("{\"url\":\"/relative\"}", LOCALHOST_HOST, connection));
+                    service.createShortLink(request("/relative"), connection));
 
-            assertEquals("Invalid URL", exception.getMessage());
+            assertEquals(INVALID_URL_MESSAGE, exception.getMessage());
         }
     }
 
@@ -106,35 +103,35 @@ class LinkServiceTest {
             "ftp://example.com/resource"
     })
     void shouldRejectUrlsWithDisallowedSchemes(String url) throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink("{\"url\":\"" + url + "\"}", LOCALHOST_HOST, connection));
+                    service.createShortLink(request(url), connection));
 
-            assertEquals("Invalid URL", exception.getMessage());
+            assertEquals(INVALID_URL_MESSAGE, exception.getMessage());
         }
     }
 
     @Test
     void shouldRejectUrlsWithInvalidUriSyntax() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink("{\"url\":\"http://example.com/a b\"}", LOCALHOST_HOST, connection));
+                    service.createShortLink(request("http://example.com/a b"), connection));
 
-            assertEquals("Invalid URL", exception.getMessage());
+            assertEquals(INVALID_URL_MESSAGE, exception.getMessage());
         }
     }
 
     @Test
     void shouldRejectRequestsMissingTheUrlField() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink("{}", LOCALHOST_HOST, connection));
+                    service.createShortLink(new CreateShortLinkRequest(null, null, LOCALHOST_PUBLIC_BASE_URL), connection));
 
             assertEquals("Missing 'url'", exception.getMessage());
         }
@@ -142,7 +139,7 @@ class LinkServiceTest {
 
     @Test
     void shouldReturnEmptyWhenShortLinkDoesNotExist() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
@@ -153,7 +150,7 @@ class LinkServiceTest {
 
     @Test
     void shouldRejectBlankShortLinkIds() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
@@ -167,42 +164,30 @@ class LinkServiceTest {
 
     @Test
     void shouldCreateAndResolveShortLinkUsingAnAlias() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_ALIAS_FALLBACK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_ALIAS_FALLBACK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
 
-            CreateLinkResult result = service.createShortLink(
-                    "{\"url\":\"https://example.com\",\"alias\":\"docs\"}",
-                    LOCALHOST_HOST,
-                    connection
-            );
+            CreateLinkResult result = service.createShortLink(request(EXAMPLE_URL, "docs"), connection);
 
             assertEquals("docs", result.id());
-            assertEquals("http://" + LOCALHOST_HOST + "/docs", result.shortUrl());
-            assertEquals(Optional.of("https://example.com"), service.resolveShortLink("docs", connection));
+            assertEquals(LOCALHOST_PUBLIC_BASE_URL + "/docs", result.shortUrl());
+            assertEquals(Optional.of(EXAMPLE_URL), service.resolveShortLink("docs", connection));
         }
     }
 
     @Test
     void shouldRejectDuplicateAliasesWhenCreatingShortLinks() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_ALIAS_FALLBACK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_ALIAS_FALLBACK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
 
-            service.createShortLink(
-                    "{\"url\":\"https://example.com\",\"alias\":\"docs\"}",
-                    LOCALHOST_HOST,
-                    connection
-            );
+            service.createShortLink(request(EXAMPLE_URL, "docs"), connection);
 
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink(
-                            "{\"url\":\"https://another-example.com\",\"alias\":\"docs\"}",
-                            LOCALHOST_HOST,
-                            connection
-                    ));
+                    service.createShortLink(request("https://another-example.com", "docs"), connection));
 
             assertEquals("Alias already exists", exception.getMessage());
         }
@@ -218,19 +203,35 @@ class LinkServiceTest {
 
     @Test
     void shouldRejectBlankAliasesWhenCreatingShortLinks() throws Exception {
-        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_ALIAS_FALLBACK_ID);
+        LinkService service = new LinkService(repository, () -> GENERATED_ALIAS_FALLBACK_ID);
 
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             repository.initializeSchema(connection);
 
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    service.createShortLink(
-                            "{\"url\":\"https://example.com\",\"alias\":\"\"}",
-                            LOCALHOST_HOST,
-                            connection
-                    ));
+                    service.createShortLink(request(EXAMPLE_URL, ""), connection));
 
             assertEquals("Invalid alias", exception.getMessage());
         }
+    }
+
+    @Test
+    void shouldRejectMissingPublicBaseUrl() throws Exception {
+        LinkService service = new LinkService(repository, () -> GENERATED_SHORT_LINK_ID);
+
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink(new CreateShortLinkRequest(EXAMPLE_URL, null, ""), connection));
+
+            assertEquals("Invalid public base URL", exception.getMessage());
+        }
+    }
+
+    private static CreateShortLinkRequest request(String url) {
+        return new CreateShortLinkRequest(url, null, LOCALHOST_PUBLIC_BASE_URL);
+    }
+
+    private static CreateShortLinkRequest request(String url, String alias) {
+        return new CreateShortLinkRequest(url, alias, LOCALHOST_PUBLIC_BASE_URL);
     }
 }

@@ -4,6 +4,7 @@ import com.linker5.flags.FeatureFlagProvider;
 import com.linker5.persistence.LinkRepository;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Optional;
 
 /**
@@ -20,7 +21,7 @@ public class RedirectHandler {
         this.featureFlagProvider = featureFlagProvider;
     }
 
-    public Optional<String> resolveRedirect(String id, Connection connection) throws Exception {
+    public Optional<String> resolveRedirect(String id, Connection connection) throws SQLException {
         if (!featureFlagProvider.isEnabled("redirects-enabled")) {
             return Optional.empty();
         }

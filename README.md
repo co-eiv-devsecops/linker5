@@ -30,6 +30,67 @@ mvn clean package -DskipTests
 java -jar target/*-jar-with-dependencies.jar   # serves on http://localhost:8080/
 ```
 
+## Deployment targets
+
+Linker now supports two deploy targets with the same core use cases:
+
+- OCI VM: keeps the current fat-jar + systemd deployment and uses `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PWD`.
+- Azure Functions: packages an HTTP-triggered Java Functions app and uses `AZURE_MYSQL_HOST`, `AZURE_MYSQL_DATABASE`, `AZURE_MYSQL_USER`, `AZURE_MYSQL_PWD`.
+
+The runtime keeps OCI compatibility. Azure reads the Azure-specific variable names without requiring OCI secrets to be renamed.
+
+### Azure Functions packaging
+
+```bash
+cd linker5-java
+mvn -DskipTests \
+  -Dazure.functions.appName="your-function-app" \
+  -Dazure.functions.resourceGroup="your-resource-group" \
+  -Dazure.functions.region="mexicocentral" \
+  azure-functions:package
+```
+
+The Azure package is written to `linker5-java/target/azure-functions/<app-name>/`.
+
+### Azure route support
+
+The Azure Functions target exposes:
+
+- `GET /`
+- `GET /css/*`
+- `GET /js/*`
+- `POST /link`
+- `GET /{id}`
+- `HEAD /{id}`
+- `DELETE /{id}`
+- `GET /healthz`
+
+Both deploy targets reuse the same `src/main/resources/wwwroot` assets, so OCI and Azure serve the same frontend without duplicating files.
+
+### GitHub Actions secrets and variables
+
+OCI deploy continues using the existing OCI and `MYSQL_*` secrets.
+
+Azure deploy requires these GitHub secrets:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_MYSQL_HOST`
+- `AZURE_MYSQL_DATABASE`
+- `AZURE_MYSQL_USER`
+- `AZURE_MYSQL_PWD`
+
+Azure deploy also requires these repository/environment variables:
+
+- `AZURE_FUNCTION_APP_NAME`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_REGION` (recommended value: `mexicocentral`)
+
+### Azure bootstrap
+
+Use `scripts/provision-azure.sh` to create the Function App, storage account, MySQL Flexible Server, and the Azure-specific app settings expected by the Functions target.
+
 ## Observability configuration
 
 The same JAR artifact can run with different log verbosity levels by changing only runtime configuration.
