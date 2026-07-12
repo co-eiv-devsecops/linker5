@@ -91,6 +91,27 @@ jobs:
             "${{ github.event.inputs.green-name }}")"
           echo "Launched green: ${GREEN}"
           echo "green=${GREEN}" >> "$GITHUB_OUTPUT"
+      - name: Wait for Bastion plugin RUNNING on green
+        run: |
+          set -euo pipefail
+          GREEN="${{ steps.launch.outputs.green }}"
+          CMP="$(oci compute instance get --instance-id "$GREEN" --query 'data."compartment-id"' --raw-output)"
+          echo "Waiting for the Bastion plugin to reach RUNNING on $GREEN ..."
+          for i in $(seq 1 30); do
+            STATUS="$(oci instance-agent plugin get \
+              --instanceagent-id "$GREEN" \
+              --compartment-id "$CMP" \
+              --plugin-name Bastion \
+              --query 'data.status' --raw-output 2>/dev/null || true)"
+            echo "  attempt $i: Bastion plugin status = ${STATUS:-<pending>}"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "Bastion plugin is RUNNING; green is reachable via the bastion."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Bastion plugin did not reach RUNNING within the timeout"
+          exit 1
 
   deploy-green:
     name: Deploy & Test Green
