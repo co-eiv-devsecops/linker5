@@ -29,6 +29,10 @@ public class Linker {
         return redirectHandler.resolveRedirect(id, connection);
     }
 
+    public Optional<String> resolveMetadata(String id, Connection connection) throws Exception {
+        return repository.findUrlById(connection, id);
+    }
+
     public boolean isHealthy(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("SELECT 1");
              ResultSet resultSet = statement.executeQuery()) {
