@@ -1,0 +1,317 @@
+name: Blue-Green Deploy
+
+# Manual, stability-first blue-green deployment:
+#   1. Build the jar.
+#   2. Launch a fresh "green" VM (cloned from the current "blue" placement).
+#   3. Deploy the jar to green and run health + functional tests.
+#   4. On success: switch the active pointer (OCI_INSTANCE_OCID) to green and
+#      terminate blue.
+#   5. On failure: terminate green; blue keeps serving untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      green-name:
+        description: "Display name for the new (green) instance"
+        required: false
+        default: "linker5-green"
+
+concurrency:
+  group: blue-green-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build jar
+        run: mvn -B -f linker5-java/pom.xml package -DskipTests
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linker-app
+          path: linker5-java/target/*-jar-with-dependencies.jar
+          if-no-files-found: error
+
+  launch-green:
+    name: Launch Green
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      blue: ${{ steps.capture.outputs.blue }}
+      green: ${{ steps.launch.outputs.green }}
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+      - name: Configure OCI CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.oci"
+          printf '%s\n' "${OCI_CLI_KEY_CONTENT}" > "${HOME}/.oci/oci_api_key.pem"
+          chmod 600 "${HOME}/.oci/oci_api_key.pem"
+          cat > "${HOME}/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_CLI_USER}
+          fingerprint=${OCI_CLI_FINGERPRINT}
+          tenancy=${OCI_CLI_TENANCY}
+          region=${OCI_CLI_REGION}
+          key_file=${HOME}/.oci/oci_api_key.pem
+          EOF
+          chmod 600 "${HOME}/.oci/config"
+      - name: Capture current (blue) instance
+        id: capture
+        run: echo "blue=${{ vars.OCI_INSTANCE_OCID }}" >> "$GITHUB_OUTPUT"
+      - name: Launch green instance
+        id: launch
+        run: |
+          set -euo pipefail
+          printf '%s\n' "${DEPLOYMENT_PUBLIC_KEY}" > deployment_key.pub
+          GREEN="$(scripts/bluegreen/launch-green.sh \
+            "${{ vars.OCI_INSTANCE_OCID }}" \
+            deployment_key.pub \
+            infra/bluegreen/cloud-init-green.yaml \
+            "${{ github.event.inputs.green-name }}")"
+          echo "Launched green: ${GREEN}"
+          echo "green=${GREEN}" >> "$GITHUB_OUTPUT"
+
+  deploy-green:
+    name: Deploy & Test Green
+    runs-on: ubuntu-latest
+    needs: launch-green
+    env:
+      DEPLOYMENT_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
+    steps:
+      - name: Deploy to green and run health + functional tests
+        uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+        with:
+          ssh-public-key: ${{ env.DEPLOYMENT_PUBLIC_KEY }}
+          bastion-id: ${{ vars.OCI_BASTION_OCID }}
+          instance-id: ${{ needs.launch-green.outputs.green }}
+          artifact-name: linker-app
+          target-path: /tmp/deploy/linker/${{ github.sha }}
+          target-os-username: ubuntu
+          oci-cli-cache-version: v1
+          script: |
+            set -euo pipefail
+
+            # Green is freshly booted: wait for cloud-init (Java install) to finish.
+            echo "Waiting for cloud-init to finish on green..."
+            sudo cloud-init status --wait || true
+            command -v java >/dev/null 2>&1 || { echo "java not available on green"; exit 1; }
+
+            DEPLOY_DIR="/tmp/deploy/linker/${{ github.sha }}"
+            JAR="$(find "$DEPLOY_DIR" -name '*-jar-with-dependencies.jar' | head -n1)"
+            if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
+              echo "No deployable jar found under $DEPLOY_DIR"
+              ls -la "$DEPLOY_DIR" || true
+              exit 1
+            fi
+            echo "Deploying artifact: $JAR"
+
+            OTEL_EXPORTER_OTLP_HEADERS_VALUE=$(cat <<'EOF'
+            ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+            EOF
+            )
+            MYSQL_HOST_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_HOST }}
+            EOF
+            )
+            MYSQL_DATABASE_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_DATABASE }}
+            EOF
+            )
+            MYSQL_USER_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_USER }}
+            EOF
+            )
+            MYSQL_PWD_VALUE=$(cat <<'EOF'
+            ${{ secrets.MYSQL_PWD }}
+            EOF
+            )
+
+            escape_systemd_value() {
+              printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+            }
+
+            OTEL_EXPORTER_OTLP_HEADERS_ESCAPED="$(escape_systemd_value "$OTEL_EXPORTER_OTLP_HEADERS_VALUE")"
+            MYSQL_HOST_ESCAPED="$(escape_systemd_value "$MYSQL_HOST_VALUE")"
+            MYSQL_DATABASE_ESCAPED="$(escape_systemd_value "$MYSQL_DATABASE_VALUE")"
+            MYSQL_USER_ESCAPED="$(escape_systemd_value "$MYSQL_USER_VALUE")"
+            MYSQL_PWD_ESCAPED="$(escape_systemd_value "$MYSQL_PWD_VALUE")"
+
+            echo "Installing/updating linker.service unit on green..."
+            sudo tee /etc/systemd/system/linker.service > /dev/null <<UNIT
+            [Unit]
+            Description=Linker URL Shortener
+            After=network-online.target
+            Wants=network-online.target
+
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=/home/ubuntu
+            Environment=PORT=8080
+            Environment=LINKER_LOG_LEVEL=INFO
+            Environment=LINKER_OTEL_LOG_EXPORT=true
+            Environment=FEATURE_REDIRECTS_ENABLED=true
+            Environment=OTEL_SERVICE_NAME=linker5-java
+            Environment=OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+            Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+            Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+            Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+            Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS_ESCAPED}"
+            Environment="MYSQL_HOST=${MYSQL_HOST_ESCAPED}"
+            Environment="MYSQL_DATABASE=${MYSQL_DATABASE_ESCAPED}"
+            Environment="MYSQL_USER=${MYSQL_USER_ESCAPED}"
+            Environment="MYSQL_PWD=${MYSQL_PWD_ESCAPED}"
+            ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            UNIT
+            sudo systemctl daemon-reload
+            sudo systemctl enable linker.service
+
+            sudo systemctl stop linker.service || true
+            sudo install -m 644 -o ubuntu -g ubuntu "$JAR" /home/ubuntu/linker.jar
+            sudo systemctl restart linker.service
+
+            echo "Health check: waiting for green to answer on :8080..."
+            healthy=false
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1; then
+                healthy=true
+                break
+              fi
+              sleep 3
+            done
+            if [ "$healthy" != "true" ]; then
+              echo "Green did not become healthy"
+              sudo journalctl -u linker.service -n 60 --no-pager || true
+              exit 1
+            fi
+            echo "Green is healthy."
+
+            echo "Functional test: create a short link..."
+            CREATE="$(curl -fsS -X POST http://127.0.0.1:8080/link \
+              -H 'Content-Type: application/json' \
+              -d '{"url":"https://www.google.com"}')"
+            echo "Create response: $CREATE"
+            ID="$(printf '%s' "$CREATE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
+            if [ -z "$ID" ]; then
+              echo "No id returned from create"
+              exit 1
+            fi
+
+            echo "Functional test: follow redirect for id=$ID..."
+            LOCATION="$(curl -s -o /dev/null -D - "http://127.0.0.1:8080/$ID" | grep -i '^location:' | tr -d '\r')"
+            echo "Redirect header: $LOCATION"
+            echo "$LOCATION" | grep -q 'https://www.google.com' || { echo "redirect target mismatch"; exit 1; }
+
+            echo "All health and functional tests passed on green."
+
+  switchover:
+    name: Switchover to Green & Retire Blue
+    runs-on: ubuntu-latest
+    needs: [launch-green, deploy-green]
+    if: ${{ success() }}
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+      - name: Configure OCI CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.oci"
+          printf '%s\n' "${OCI_CLI_KEY_CONTENT}" > "${HOME}/.oci/oci_api_key.pem"
+          chmod 600 "${HOME}/.oci/oci_api_key.pem"
+          cat > "${HOME}/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_CLI_USER}
+          fingerprint=${OCI_CLI_FINGERPRINT}
+          tenancy=${OCI_CLI_TENANCY}
+          region=${OCI_CLI_REGION}
+          key_file=${HOME}/.oci/oci_api_key.pem
+          EOF
+          chmod 600 "${HOME}/.oci/config"
+      - name: Point active instance (OCI_INSTANCE_OCID) to green
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          GREEN="${{ needs.launch-green.outputs.green }}"
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT secret not set; cannot update OCI_INSTANCE_OCID automatically."
+            echo "Set the repo variable OCI_INSTANCE_OCID to: ${GREEN}"
+            exit 1
+          fi
+          gh variable set OCI_INSTANCE_OCID --repo "${{ github.repository }}" --body "${GREEN}"
+          echo "Active instance switched to green: ${GREEN}"
+      - name: Retire blue instance
+        run: scripts/bluegreen/terminate-instance.sh "${{ needs.launch-green.outputs.blue }}"
+
+  rollback:
+    name: Rollback (Terminate Green)
+    runs-on: ubuntu-latest
+    needs: [launch-green, deploy-green]
+    if: ${{ failure() && needs.launch-green.outputs.green != '' }}
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+      - name: Configure OCI CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.oci"
+          printf '%s\n' "${OCI_CLI_KEY_CONTENT}" > "${HOME}/.oci/oci_api_key.pem"
+          chmod 600 "${HOME}/.oci/oci_api_key.pem"
+          cat > "${HOME}/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_CLI_USER}
+          fingerprint=${OCI_CLI_FINGERPRINT}
+          tenancy=${OCI_CLI_TENANCY}
+          region=${OCI_CLI_REGION}
+          key_file=${HOME}/.oci/oci_api_key.pem
+          EOF
+          chmod 600 "${HOME}/.oci/config"
+      - name: Terminate green (rollback)
+        run: scripts/bluegreen/terminate-instance.sh "${{ needs.launch-green.outputs.green }}"
