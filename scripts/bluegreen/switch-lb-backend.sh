@@ -48,6 +48,13 @@ oci lb backend create \
   --port "$PORT" \
   --wait-for-state SUCCEEDED >/dev/null 2>&1 || log "green backend may already exist; continuing"
 
+# Diagnostics: show how the backend set health-checks its members, so a green
+# that is up on localhost but CRITICAL at the LB is easy to explain (wrong
+# port/path, or a security list that blocks the LB from reaching the backend).
+log "Backend-set health checker config:"
+oci lb backend-set get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+  --query 'data."health-checker"' 2>&1 | sed 's/^/[switch-lb]   /' >&2 || true
+
 log "Waiting for the green backend to become healthy (status OK) ..."
 health="UNKNOWN"
 for i in $(seq 1 30); do
@@ -65,6 +72,12 @@ done
 
 if [ "$health" != "OK" ]; then
   log "Green backend never became healthy; NOT removing blue. Aborting switchover."
+  log "--- green backend health detail ---"
+  oci lb backend-health get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+    --backend-name "${GREEN_IP}:${PORT}" 2>&1 | sed 's/^/[switch-lb]   /' >&2 || true
+  log "--- blue backend health (for comparison) ---"
+  oci lb backend-health get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+    --backend-name "${BLUE_IP}:${PORT}" 2>&1 | sed 's/^/[switch-lb]   /' >&2 || true
   exit 1
 fi
 
