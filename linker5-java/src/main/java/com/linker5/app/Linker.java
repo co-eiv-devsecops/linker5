@@ -9,7 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-public class Linker {
+public class Linker implements LinkerUseCases {
 
     private final LinkService linkService;
     private final RedirectHandler redirectHandler;
@@ -21,22 +21,27 @@ public class Linker {
         this.repository = repository;
     }
 
-    public CreateLinkResult createShortLink(String requestBody, String host, Connection connection) throws Exception {
-        return linkService.createShortLink(requestBody, host, connection);
+    @Override
+    public CreateLinkResult createShortLink(CreateShortLinkRequest request, Connection connection) throws SQLException {
+        return linkService.createShortLink(request, connection);
     }
 
-    public Optional<String> resolveRedirect(String id, Connection connection) throws Exception {
+    @Override
+    public Optional<String> resolveRedirect(String id, Connection connection) throws SQLException {
         return redirectHandler.resolveRedirect(id, connection);
     }
 
-    public Optional<String> resolveMetadata(String id, Connection connection) throws Exception {
+    @Override
+    public Optional<String> resolveMetadata(String id, Connection connection) throws SQLException {
         return repository.findUrlById(connection, id);
     }
 
-    public boolean deleteShortLink(String id, Connection connection) throws Exception {
+    @Override
+    public boolean deleteShortLink(String id, Connection connection) throws SQLException {
         return repository.deleteById(connection, id);
     }
 
+    @Override
     public boolean isHealthy(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("SELECT 1");
              ResultSet resultSet = statement.executeQuery()) {
@@ -44,7 +49,8 @@ public class Linker {
         }
     }
 
-    public void initializeSchema(Connection connection) throws Exception {
+    @Override
+    public void initializeSchema(Connection connection) throws SQLException {
         repository.initializeSchema(connection);
     }
 }

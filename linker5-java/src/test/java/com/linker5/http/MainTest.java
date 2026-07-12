@@ -2,6 +2,7 @@ package com.linker5.http;
 
 import com.linker5.app.LinkService;
 import com.linker5.app.Linker;
+import com.linker5.app.LinkerUseCases;
 import com.linker5.flags.EnvFeatureFlagProvider;
 import com.linker5.observability.NoopAppObservability;
 import com.linker5.persistence.LinkRepository;
@@ -41,7 +42,7 @@ class MainTest {
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
             assertNotNull(connection);
             LinkRepository repository = new LinkRepository();
-            Linker linker = new Linker(new LinkService(), new RedirectHandler(repository, new EnvFeatureFlagProvider()), repository);
+            LinkerUseCases linker = new Linker(new LinkService(), new RedirectHandler(repository, new EnvFeatureFlagProvider()), repository);
 
             Main.initializeSchema(connection, linker, new NoopAppObservability());
 
