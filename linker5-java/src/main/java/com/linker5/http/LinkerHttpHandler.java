@@ -1,6 +1,8 @@
 package com.linker5.http;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.linker5.app.CreateLinkResult;
 import com.linker5.app.Linker;
 import com.linker5.observability.AppObservability;
@@ -25,6 +27,7 @@ public class LinkerHttpHandler implements HttpHandler {
     private static final String APPLICATION_JSON = "application/json";
     private static final Set<String> STATIC_ASSET_DIRECTORIES = Set.of("css", "js");
     private static final Pattern STATIC_ASSET_FILE_NAME = Pattern.compile("[A-Za-z0-9_.-]+");
+    private static final Gson ERROR_JSON_GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private final Linker linker;
     private final Connection db;
@@ -175,7 +178,9 @@ public class LinkerHttpHandler implements HttpHandler {
         } catch (IllegalArgumentException exception) {
             observability.markError(persistSpan, exception);
             logWarn("Invalid short link creation request: " + exception.getMessage());
-            send(ex, 400, String.format("{\"error\":\"%s\"}", exception.getMessage()), APPLICATION_JSON);
+            JsonObject errorBody = new JsonObject();
+            errorBody.addProperty("error", exception.getMessage());
+            send(ex, 400, ERROR_JSON_GSON.toJson(errorBody), APPLICATION_JSON);
             return null;
         } catch (Exception exception) {
             observability.markError(persistSpan, exception);
