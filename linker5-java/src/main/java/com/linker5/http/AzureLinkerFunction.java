@@ -25,6 +25,14 @@ public class AzureLinkerFunction {
         return handle(request, context, "/link");
     }
 
+    @FunctionName("rootUi")
+    public HttpResponseMessage rootUi(
+            @HttpTrigger(name = "req", methods = {HttpMethod.GET}, authLevel = AuthorizationLevel.ANONYMOUS, route = "/")
+            HttpRequestMessage<Optional<String>> request,
+            final ExecutionContext context) throws Exception {
+        return handle(request, context, "/");
+    }
+
     @FunctionName("getRoute")
     public HttpResponseMessage getRoute(
             @HttpTrigger(name = "req", methods = {HttpMethod.GET}, authLevel = AuthorizationLevel.ANONYMOUS, route = "{*path}")
