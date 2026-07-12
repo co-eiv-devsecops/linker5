@@ -4,8 +4,9 @@ name: Blue-Green Deploy
 #   1. Build the jar.
 #   2. Launch a fresh "green" VM (cloned from the current "blue" placement).
 #   3. Deploy the jar to green and run health + functional tests.
-#   4. On success: switch the active pointer (OCI_INSTANCE_OCID) to green and
-#      terminate blue.
+#   4. On success: switch Load Balancer traffic to green (register green backend,
+#      wait until healthy, remove blue backend), update the deploy pointer, and
+#      optionally terminate blue (only when retire_blue = true).
 #   5. On failure: terminate green; blue keeps serving untouched.
 
 on:
@@ -264,7 +265,7 @@ jobs:
             echo "All health and functional tests passed on green."
 
   switchover:
-    name: Switchover to Green (retire blue optional)
+    name: Switchover to Green via Load Balancer
     runs-on: ubuntu-latest
     needs: [launch-green, deploy-green]
     if: ${{ success() }}
@@ -293,7 +294,17 @@ jobs:
           key_file=${HOME}/.oci/oci_api_key.pem
           EOF
           chmod 600 "${HOME}/.oci/config"
-      - name: Point active instance (OCI_INSTANCE_OCID) to green
+      - name: Switch Load Balancer traffic to green
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source infra/linker.env
+          scripts/bluegreen/switch-lb-backend.sh \
+            "$OCI_LB_OCID" \
+            "$OCI_LB_LINKER_BACKEND" \
+            "${{ needs.launch-green.outputs.green }}" \
+            "${{ needs.launch-green.outputs.blue }}"
+      - name: Update deploy pointer (OCI_INSTANCE_OCID) to green
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |

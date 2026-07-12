@@ -15,13 +15,15 @@ Workflow: [`.github/workflows/blue-green-deploy.yml`](../../.github/workflows/bl
 | `build` | Builds the runnable jar and uploads it as the `linker-app` artifact. |
 | `launch-green` | Reads the current active instance (`OCI_INSTANCE_OCID` = blue) and launches a **green** VM cloned from its placement (compartment, AD, shape, subnet, image) using `scripts/bluegreen/launch-green.sh` + `infra/bluegreen/cloud-init-green.yaml`. |
 | `deploy-green` | Deploys the jar to green through the OCI Bastion, writes the systemd unit (MySQL + OTel env, identical to prod) and runs **health + functional tests** (create a link, follow its redirect). |
-| `switchover` | On success only: repoints the active pointer `OCI_INSTANCE_OCID` to green, then **terminates blue**. |
+| `switchover` | On success only: **switches Load Balancer traffic to green** (registers the green backend in the `linker-5` backend set, waits until it is healthy, then removes the blue backend), updates the deploy pointer `OCI_INSTANCE_OCID`, and — only when `retire_blue = true` — terminates blue. |
 | `rollback` | On failure only: **terminates green**; blue stays as the active instance. |
 
-The "active pointer" is the repository variable **`OCI_INSTANCE_OCID`**, which the
-normal CD pipeline (`ci-cd-pipeline.yml`) already deploys to. Switchover = updating
-that variable to the green OCID. There is no load balancer in this environment,
-so this variable is the single source of truth for "which VM is production".
+Traffic switchover happens at the **Load Balancer** (`OCI_LB_OCID` / backend set
+`OCI_LB_LINKER_BACKEND`, read from [`infra/linker.env`](../linker.env)) via
+`scripts/bluegreen/switch-lb-backend.sh`. Backends are addressed as `<ip>:<port>`.
+The repository variable **`OCI_INSTANCE_OCID`** is the deploy pointer used by the
+CD pipeline (`ci-cd-pipeline.yml`) and is updated to green as well (best-effort,
+requires `GH_PAT`).
 
 ## Prerequisites
 
@@ -30,11 +32,13 @@ so this variable is the single source of truth for "which VM is production".
   `OCI_CLI_REGION`, `OCI_BASTION_OCID`, `OCI_INSTANCE_OCID`,
   `DEPLOYMENT_PUBLIC_KEY`, `OTEL_EXPORTER_OTLP_HEADERS`, `MYSQL_*`.
 - The OCI identity behind those credentials must be allowed to **launch and
-  terminate instances** in the compartment.
-- A **`GH_PAT`** secret (fine-grained PAT with *Variables: read/write* on this
-  repo) so `switchover` can update `OCI_INSTANCE_OCID`. Without it, green is
-  built and tested but the pointer is not moved and blue is not retired — the
-  job fails loudly and prints the green OCID to set manually.
+  terminate instances** and **manage the Load Balancer backend set** in the
+  target compartment.
+- `infra/linker.env` must contain the LB OCID and backend set name.
+- **`GH_PAT`** secret (PAT with *Variables: read/write*) is **optional**: it is
+  only used to update the `OCI_INSTANCE_OCID` deploy pointer automatically. If it
+  is absent (e.g. the org requires approval for the PAT), traffic still switches
+  at the LB and the job prints the one-line command to update the pointer by hand.
 
 ## Run it
 
