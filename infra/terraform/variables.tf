@@ -159,3 +159,14 @@ variable "assign_public_ip" {
   type        = bool
   default     = false
 }
+
+variable "ssh_allowed_cidr" {
+  description = "CIDR allowed to reach the VM over SSH (port 22) when create_network = true, e.g. \"203.0.113.4/32\". REQUIRED in that mode; must not be 0.0.0.0/0. Ignored when create_network = false (the existing subnet's security list applies instead)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ssh_allowed_cidr != "0.0.0.0/0"
+    error_message = "ssh_allowed_cidr must not be 0.0.0.0/0; scope SSH access to a specific CIDR (your office/VPN range)."
+  }
+}
