@@ -98,6 +98,36 @@ class LinkServiceTest {
         }
     }
 
+    @ParameterizedTest(name = "When_UrlSchemeIsNotAllowed_Expect_IllegalArgumentException [{index}]")
+    @ValueSource(strings = {
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "file:///etc/passwd",
+            "ftp://example.com/resource"
+    })
+    void shouldRejectUrlsWithDisallowedSchemes(String url) throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink("{\"url\":\"" + url + "\"}", LOCALHOST_HOST, connection));
+
+            assertEquals("Invalid URL", exception.getMessage());
+        }
+    }
+
+    @Test
+    void shouldRejectUrlsWithInvalidUriSyntax() throws Exception {
+        LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);
+
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    service.createShortLink("{\"url\":\"http://example.com/a b\"}", LOCALHOST_HOST, connection));
+
+            assertEquals("Invalid URL", exception.getMessage());
+        }
+    }
+
     @Test
     void shouldRejectRequestsMissingTheUrlField() throws Exception {
         LinkService service = new LinkService(new Gson(), repository, () -> GENERATED_SHORT_LINK_ID);

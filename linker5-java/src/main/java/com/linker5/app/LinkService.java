@@ -7,14 +7,18 @@ import com.linker5.ids.UuidShortIdGenerator;
 import com.linker5.persistence.LinkRepository;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 public class LinkService {
 
     private static final String ALIAS_FIELD = "alias";
+    private static final Set<String> ALLOWED_URL_SCHEMES = Set.of("http", "https");
 
     private final Gson gson;
     private final LinkRepository repository;
@@ -92,7 +96,14 @@ public class LinkService {
     }
 
     void validateAbsoluteUrl(String url) {
-        if (!URI.create(url).isAbsolute()) {
+        URI uri;
+        try {
+            uri = new URI(url);
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+        String scheme = uri.getScheme();
+        if (!uri.isAbsolute() || scheme == null || !ALLOWED_URL_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Invalid URL");
         }
     }
