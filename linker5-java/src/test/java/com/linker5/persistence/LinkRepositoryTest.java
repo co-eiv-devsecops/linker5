@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LinkRepositoryTest {
@@ -22,6 +23,20 @@ class LinkRepositoryTest {
 
             assertTrue(repository.findUrlById(connection, SHORT_LINK_ID).isPresent());
             assertEquals("https://example.com", repository.findUrlById(connection, SHORT_LINK_ID).orElseThrow());
+        }
+    }
+
+    @Test
+    void shouldDeleteStoredUrlAndReportWhetherARowWasRemoved() throws Exception {
+        LinkRepository repository = new LinkRepository();
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            repository.initializeSchema(connection);
+            repository.save(connection, SHORT_LINK_ID, "https://example.com");
+
+            assertTrue(repository.deleteById(connection, SHORT_LINK_ID));
+            assertTrue(repository.findUrlById(connection, SHORT_LINK_ID).isEmpty());
+            assertFalse(repository.deleteById(connection, SHORT_LINK_ID));
         }
     }
 }

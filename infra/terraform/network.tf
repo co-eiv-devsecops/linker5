@@ -36,15 +36,22 @@ resource "oci_core_security_list" "sl" {
   vcn_id         = oci_core_vcn.vcn[0].id
   display_name   = "${var.project_name}-sl"
 
+  lifecycle {
+    precondition {
+      condition     = var.ssh_allowed_cidr != ""
+      error_message = "ssh_allowed_cidr must be set (e.g. your office/VPN CIDR) when create_network = true; SSH is no longer opened to 0.0.0.0/0 by default."
+    }
+  }
+
   egress_security_rules {
     destination = "0.0.0.0/0"
     protocol    = "all"
   }
 
-  # SSH
+  # SSH, restricted to the operator-provided CIDR (see var.ssh_allowed_cidr)
   ingress_security_rules {
     protocol = "6" # TCP
-    source   = "0.0.0.0/0"
+    source   = var.ssh_allowed_cidr
     tcp_options {
       min = 22
       max = 22

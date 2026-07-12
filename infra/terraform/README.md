@@ -74,6 +74,7 @@ terraform apply -var="oci_auth=ApiKey"
 | `github_token`      | `""`                        | Read-only PAT to clone a PRIVATE repo (empty = public) |
 | `repo_branch`       | `main`                      | Branch to deploy                             |
 | `app_port`          | `8080`                      | Port Linker listens on                       |
+| `ssh_allowed_cidr`  | `""` (required if `create_network = true`) | CIDR allowed to SSH into the VM (port 22); must not be `0.0.0.0/0` |
 
 For a larger ARM Always-Free shape, set in `terraform.tfvars`:
 

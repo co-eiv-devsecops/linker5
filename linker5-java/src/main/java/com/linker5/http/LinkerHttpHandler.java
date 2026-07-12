@@ -1,6 +1,8 @@
 package com.linker5.http;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.linker5.app.CreateLinkResult;
 import com.linker5.app.Linker;
 import com.linker5.observability.AppObservability;
@@ -15,12 +17,17 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 public class LinkerHttpHandler implements HttpHandler {
 
     private static final String APPLICATION_JSON = "application/json";
+    private static final Set<String> STATIC_ASSET_DIRECTORIES = Set.of("css", "js");
+    private static final Pattern STATIC_ASSET_FILE_NAME = Pattern.compile("[A-Za-z0-9_.-]+");
+    private static final Gson ERROR_JSON_GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private final Linker linker;
     private final Connection db;
@@ -59,11 +66,26 @@ public class LinkerHttpHandler implements HttpHandler {
                 return;
             }
             if (path.startsWith("/css/") || path.startsWith("/js/")) {
-                status = serveStatic(ex, path.substring(1));
+                String staticAssetPath = path.substring(1);
+                if (!isSafeStaticAssetPath(staticAssetPath)) {
+                    logWarn("Rejected static asset request outside the allowed directory: " + staticAssetPath);
+                    send(ex, 404, "Not found", "text/plain");
+                    status = 404;
+                    return;
+                }
+                status = serveStatic(ex, staticAssetPath);
                 return;
             }
             if (path.equals("/healthz")) {
                 status = healthz(ex);
+                return;
+            }
+            if (method.equalsIgnoreCase("HEAD")) {
+                status = metadata(ex, path.substring(1));
+                return;
+            }
+            if (method.equalsIgnoreCase("DELETE")) {
+                status = delete(ex, path.substring(1));
                 return;
             }
             status = redirect(ex, path.substring(1));
@@ -157,6 +179,61 @@ public class LinkerHttpHandler implements HttpHandler {
         }
     }
 
+    private int metadata(HttpExchange ex, String id) throws Exception {
+        Span span = observability.startChildSpan("http.short_link_metadata");
+        try (Scope ignored = span.makeCurrent()) {
+            logDebug("Metadata lookup requested for id=" + id);
+            long dbStart = System.nanoTime();
+            Optional<String> targetUrl = linker.resolveMetadata(id, db);
+            observability.recordDatabaseOperation("SELECT", elapsedMillis(dbStart));
+
+            if (targetUrl.isPresent()) {
+                span.setAttribute("linker.short_id", id);
+                logInfo("Metadata found for id=" + id);
+                send(ex, 200, targetUrl.get(), "text/plain");
+                return 200;
+            }
+
+            logWarn("Metadata not found for id=" + id);
+            send(ex, 404, "Short URL not found", "text/plain");
+            return 404;
+        } catch (Exception exception) {
+            observability.markError(span, exception);
+            logError("Metadata lookup failed for id=" + id, exception);
+            throw exception;
+        } finally {
+            span.end();
+        }
+    }
+
+    private int delete(HttpExchange ex, String id) throws Exception {
+        Span span = observability.startChildSpan("http.delete_short_link");
+        try (Scope ignored = span.makeCurrent()) {
+            logDebug("Delete requested for id=" + id);
+            long dbStart = System.nanoTime();
+            boolean deleted = linker.deleteShortLink(id, db);
+            observability.recordDatabaseOperation("DELETE", elapsedMillis(dbStart));
+
+            if (deleted) {
+                span.setAttribute("linker.short_id", id);
+                logInfo("Short URL deleted: id=" + id);
+                ex.sendResponseHeaders(204, -1);
+                ex.close();
+                return 204;
+            }
+
+            logWarn("Delete requested for unknown id=" + id);
+            send(ex, 404, "Short URL not found", "text/plain");
+            return 404;
+        } catch (Exception exception) {
+            observability.markError(span, exception);
+            logError("Delete failed for id=" + id, exception);
+            throw exception;
+        } finally {
+            span.end();
+        }
+    }
+
     private CreateLinkResult createShortLinkOrSendBadRequest(HttpExchange ex, String body) throws Exception {
         Span persistSpan = observability.startChildSpan("db.insert_short_url");
         try {
@@ -164,7 +241,9 @@ public class LinkerHttpHandler implements HttpHandler {
         } catch (IllegalArgumentException exception) {
             observability.markError(persistSpan, exception);
             logWarn("Invalid short link creation request: " + exception.getMessage());
-            send(ex, 400, String.format("{\"error\":\"%s\"}", exception.getMessage()), APPLICATION_JSON);
+            JsonObject errorBody = new JsonObject();
+            errorBody.addProperty("error", exception.getMessage());
+            send(ex, 400, ERROR_JSON_GSON.toJson(errorBody), APPLICATION_JSON);
             return null;
         } catch (Exception exception) {
             observability.markError(persistSpan, exception);
@@ -237,6 +316,18 @@ public class LinkerHttpHandler implements HttpHandler {
         ex.close();
     }
 
+    static boolean isSafeStaticAssetPath(String file) {
+        int separatorIndex = file.indexOf('/');
+        if (separatorIndex < 0) {
+            return false;
+        }
+        String directory = file.substring(0, separatorIndex);
+        String name = file.substring(separatorIndex + 1);
+        return STATIC_ASSET_DIRECTORIES.contains(directory)
+                && !name.isEmpty()
+                && STATIC_ASSET_FILE_NAME.matcher(name).matches();
+    }
+
     static String resolveRoute(String path, String method) {
         if (path.equals("/healthz")) {
             return "healthcheck";
@@ -249,6 +340,12 @@ public class LinkerHttpHandler implements HttpHandler {
         }
         if (path.startsWith("/css/") || path.startsWith("/js/")) {
             return "static-asset";
+        }
+        if (method.equalsIgnoreCase("HEAD")) {
+            return "short-link-metadata";
+        }
+        if (method.equalsIgnoreCase("DELETE")) {
+            return "delete-short-link";
         }
         return "redirect-short-link";
     }
