@@ -29,9 +29,8 @@ public class AzureLinkerFunction {
     public HttpResponseMessage getRoute(
             @HttpTrigger(name = "req", methods = {HttpMethod.GET}, authLevel = AuthorizationLevel.ANONYMOUS, route = "{*path}")
             HttpRequestMessage<Optional<String>> request,
-            @BindingName("path") String path,
             final ExecutionContext context) throws Exception {
-        return handle(request, context, normalizePath(path));
+        return handle(request, context, normalizePath(request.getUri().getPath()));
     }
 
     @FunctionName("headLink")
@@ -106,7 +105,7 @@ public class AzureLinkerFunction {
         if (path == null || path.isEmpty()) {
             return "/";
         }
-        return "/" + path;
+        return path;
     }
 
     private static String firstHeader(HttpRequestMessage<Optional<String>> request, String headerName) {

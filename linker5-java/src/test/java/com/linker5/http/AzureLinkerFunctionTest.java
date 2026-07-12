@@ -72,8 +72,8 @@ class AzureLinkerFunctionTest {
     void shouldNormalizeAzureCatchAllPath() {
         assertEquals("/", AzureLinkerFunction.normalizePath(null));
         assertEquals("/", AzureLinkerFunction.normalizePath(""));
-        assertEquals("/healthz", AzureLinkerFunction.normalizePath("healthz"));
-        assertEquals("/css/style.css", AzureLinkerFunction.normalizePath("css/style.css"));
+        assertEquals("/healthz", AzureLinkerFunction.normalizePath("/healthz"));
+        assertEquals("/css/style.css", AzureLinkerFunction.normalizePath("/css/style.css"));
     }
 
     private static final class FakeHttpRequest implements HttpRequestMessage<Optional<String>> {
