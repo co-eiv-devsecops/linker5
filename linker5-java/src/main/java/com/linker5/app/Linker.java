@@ -33,6 +33,10 @@ public class Linker {
         return repository.findUrlById(connection, id);
     }
 
+    public boolean deleteShortLink(String id, Connection connection) throws Exception {
+        return repository.deleteById(connection, id);
+    }
+
     public boolean isHealthy(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("SELECT 1");
              ResultSet resultSet = statement.executeQuery()) {

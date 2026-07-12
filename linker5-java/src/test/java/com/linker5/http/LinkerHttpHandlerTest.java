@@ -213,6 +213,38 @@ class LinkerHttpHandlerTest {
     }
 
     @Test
+    void shouldDeleteShortLinkAndReturnNoContent() throws Exception {
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            LinkRepository repository = new LinkRepository();
+            repository.initializeSchema(connection);
+            repository.save(connection, "abc12345", "https://example.com/target");
+            LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
+
+            FakeHttpExchange exchange = new FakeHttpExchange("DELETE", "/abc12345", "", LOCALHOST_HOST);
+            handler.handle(exchange);
+
+            assertEquals(204, exchange.statusCode);
+            assertEquals("", exchange.responseAsText());
+            assertTrue(repository.findUrlById(connection, "abc12345").isEmpty());
+        }
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenDeletingUnknownShortLink() throws Exception {
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            LinkRepository repository = new LinkRepository();
+            repository.initializeSchema(connection);
+            LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
+
+            FakeHttpExchange exchange = new FakeHttpExchange("DELETE", "/missing-id", "", LOCALHOST_HOST);
+            handler.handle(exchange);
+
+            assertEquals(404, exchange.statusCode);
+            assertEquals("Short URL not found", exchange.responseAsText());
+        }
+    }
+
+    @Test
     void shouldReturnServerErrorWhenUnhandledExceptionOccurs() throws Exception {
         LinkerHttpHandler handler = newHandler(null, defaultLinker(new LinkRepository()));
         FakeHttpExchange exchange = new FakeHttpExchange("POST", CREATE_LINK_PATH, "{\"url\":\"https://example.com\"}", LOCALHOST_HOST);
@@ -230,6 +262,7 @@ class LinkerHttpHandlerTest {
         assertEquals("static-asset", LinkerHttpHandler.resolveRoute("/css/style.css", "GET"));
         assertEquals("redirect-short-link", LinkerHttpHandler.resolveRoute("/abc12345", "GET"));
         assertEquals("short-link-metadata", LinkerHttpHandler.resolveRoute("/abc12345", "HEAD"));
+        assertEquals("delete-short-link", LinkerHttpHandler.resolveRoute("/abc12345", "DELETE"));
         assertTrue(LinkerHttpHandler.elapsedMillis(System.nanoTime() - 2_000_000) >= 0);
     }
 

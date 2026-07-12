@@ -10,6 +10,7 @@ import java.sql.DriverManager;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LinkerTest {
@@ -51,6 +52,23 @@ class LinkerTest {
             linker.createShortLink("{\"url\":\"https://example.com\"}", "localhost:8080", connection);
 
             assertEquals(Optional.of("https://example.com"), linker.resolveMetadata(SHORT_LINK_ID, connection));
+        }
+    }
+
+    @Test
+    void shouldDeleteShortLinkAndReportWhetherItExisted() throws Exception {
+        LinkRepository repository = new LinkRepository();
+        LinkService linkService = new LinkService(new Gson(), repository, () -> SHORT_LINK_ID);
+        RedirectHandler redirectHandler = new RedirectHandler(repository, flagName -> true);
+        Linker linker = new Linker(linkService, redirectHandler, repository);
+
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            linker.initializeSchema(connection);
+            linker.createShortLink("{\"url\":\"https://example.com\"}", "localhost:8080", connection);
+
+            assertTrue(linker.deleteShortLink(SHORT_LINK_ID, connection));
+            assertEquals(Optional.empty(), linker.resolveMetadata(SHORT_LINK_ID, connection));
+            assertFalse(linker.deleteShortLink(SHORT_LINK_ID, connection));
         }
     }
 }
