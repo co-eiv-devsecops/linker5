@@ -1,0 +1,69 @@
+name: LB Inspect (diagnostic)
+
+# Cheap, no-VM diagnostic that dumps the Load Balancer backend set health-checker
+# config, its backends and their health, using the pipeline's OCI identity
+# (which — unlike a student Cloud Shell — can read the professor-managed LB).
+# Use it to understand why a backend is CRITICAL before running blue-green again.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect Load Balancer
+    runs-on: ubuntu-latest
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+      - name: Configure OCI CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.oci"
+          printf '%s\n' "${OCI_CLI_KEY_CONTENT}" > "${HOME}/.oci/oci_api_key.pem"
+          chmod 600 "${HOME}/.oci/oci_api_key.pem"
+          cat > "${HOME}/.oci/config" <<EOF
+          [DEFAULT]
+          user=${OCI_CLI_USER}
+          fingerprint=${OCI_CLI_FINGERPRINT}
+          tenancy=${OCI_CLI_TENANCY}
+          region=${OCI_CLI_REGION}
+          key_file=${HOME}/.oci/oci_api_key.pem
+          EOF
+          chmod 600 "${HOME}/.oci/config"
+      - name: Dump LB backend set, backends and health
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source infra/linker.env
+          echo "=== Load Balancer summary (listeners, IPs) ==="
+          oci lb load-balancer get --load-balancer-id "$OCI_LB_OCID" \
+            --query 'data.{name:"display-name", ips:"ip-addresses", listeners:listeners}' || true
+          echo
+          echo "=== Backend set health-checker (${OCI_LB_LINKER_BACKEND}) ==="
+          oci lb backend-set get --load-balancer-id "$OCI_LB_OCID" \
+            --backend-set-name "$OCI_LB_LINKER_BACKEND" --query 'data."health-checker"' || true
+          echo
+          echo "=== Backends ==="
+          oci lb backend-set get --load-balancer-id "$OCI_LB_OCID" \
+            --backend-set-name "$OCI_LB_LINKER_BACKEND" \
+            --query 'data.backends[].{name:name, ip:"ip-address", port:port}' --output table || true
+          echo
+          echo "=== Per-backend health detail ==="
+          for b in $(oci lb backend-set get --load-balancer-id "$OCI_LB_OCID" \
+              --backend-set-name "$OCI_LB_LINKER_BACKEND" \
+              --query 'data.backends[].name' --output json | jq -r '.[]'); do
+            echo "--- backend: ${b} ---"
+            oci lb backend-health get --load-balancer-id "$OCI_LB_OCID" \
+              --backend-set-name "$OCI_LB_LINKER_BACKEND" --backend-name "$b" || true
+            echo
+          done
