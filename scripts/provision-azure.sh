@@ -143,7 +143,6 @@ ensure_function_app() {
       AZURE_MYSQL_PWD="${mysql_admin_password}" \
       FEATURE_REDIRECTS_ENABLED=true \
       LINKER_LOG_LEVEL=INFO \
-      WEBSITE_RUN_FROM_PACKAGE=1 \
     --output none
 }
 

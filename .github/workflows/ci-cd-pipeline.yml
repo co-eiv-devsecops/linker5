@@ -438,7 +438,6 @@ jobs:
           AZURE_MYSQL_PWD="${AZURE_MYSQL_PWD}"
           FEATURE_REDIRECTS_ENABLED=true
           LINKER_LOG_LEVEL=INFO
-          WEBSITE_RUN_FROM_PACKAGE=1
 
       - name: Deploy Azure Function package
         uses: Azure/functions-action@v1
