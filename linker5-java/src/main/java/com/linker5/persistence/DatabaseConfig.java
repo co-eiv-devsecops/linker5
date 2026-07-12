@@ -26,8 +26,10 @@ public class DatabaseConfig {
             database = "linker";
         }
 
+        String sslMode = resolveSslMode(host);
+
         return "jdbc:mysql://" + host + ":3306/" + database
-                + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                + "?sslMode=" + sslMode + "&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     }
 
     public String getDatabaseUser() {
@@ -44,5 +46,18 @@ public class DatabaseConfig {
             return value;
         }
         return envProvider.apply(secondary);
+    }
+
+    private String resolveSslMode(String host) {
+        String configuredSslMode = getenv("MYSQL_SSL_MODE", "AZURE_MYSQL_SSL_MODE");
+        if (configuredSslMode != null && !configuredSslMode.isBlank()) {
+            return configuredSslMode;
+        }
+
+        if (host != null && host.endsWith(".mysql.database.azure.com")) {
+            return "REQUIRED";
+        }
+
+        return "DISABLED";
     }
 }

@@ -16,7 +16,7 @@ class DatabaseConfigTest {
 
         assertTrue(connectionString.startsWith("jdbc:mysql://"),
                 "La cadena de conexión debe usar el driver estricto de MySQL");
-        assertTrue(connectionString.contains("useSSL="));
+        assertTrue(connectionString.contains("sslMode="));
         assertTrue(connectionString.contains("serverTimezone="));
     }
 
@@ -29,8 +29,21 @@ class DatabaseConfigTest {
                 "AZURE_MYSQL_PWD", "azure-pwd"
         )::get);
 
-        assertEquals("jdbc:mysql://azure-host:3306/azure-db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC", config.getConnectionString());
+        assertEquals("jdbc:mysql://azure-host:3306/azure-db?sslMode=DISABLED&allowPublicKeyRetrieval=true&serverTimezone=UTC", config.getConnectionString());
         assertEquals("azure-user", config.getDatabaseUser());
         assertEquals("azure-pwd", config.getDatabasePassword());
+    }
+
+    @Test
+    void shouldRequireSslForAzureManagedMysqlHosts() {
+        DatabaseConfig config = new DatabaseConfig(Map.of(
+                "AZURE_MYSQL_HOST", "azure-server.mysql.database.azure.com",
+                "AZURE_MYSQL_DATABASE", "azure-db"
+        )::get);
+
+        assertEquals(
+                "jdbc:mysql://azure-server.mysql.database.azure.com:3306/azure-db?sslMode=REQUIRED&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+                config.getConnectionString()
+        );
     }
 }
