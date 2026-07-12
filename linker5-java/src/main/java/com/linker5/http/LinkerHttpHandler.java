@@ -80,6 +80,14 @@ public class LinkerHttpHandler implements HttpHandler {
                 status = healthz(ex);
                 return;
             }
+            if (method.equalsIgnoreCase("HEAD")) {
+                status = metadata(ex, path.substring(1));
+                return;
+            }
+            if (method.equalsIgnoreCase("DELETE")) {
+                status = delete(ex, path.substring(1));
+                return;
+            }
             status = redirect(ex, path.substring(1));
         } catch (Exception exception) {
             observability.markError(requestSpan, exception);
@@ -165,6 +173,61 @@ public class LinkerHttpHandler implements HttpHandler {
         } catch (Exception exception) {
             observability.markError(span, exception);
             logError("Redirect lookup failed for id=" + id, exception);
+            throw exception;
+        } finally {
+            span.end();
+        }
+    }
+
+    private int metadata(HttpExchange ex, String id) throws Exception {
+        Span span = observability.startChildSpan("http.short_link_metadata");
+        try (Scope ignored = span.makeCurrent()) {
+            logDebug("Metadata lookup requested for id=" + id);
+            long dbStart = System.nanoTime();
+            Optional<String> targetUrl = linker.resolveMetadata(id, db);
+            observability.recordDatabaseOperation("SELECT", elapsedMillis(dbStart));
+
+            if (targetUrl.isPresent()) {
+                span.setAttribute("linker.short_id", id);
+                logInfo("Metadata found for id=" + id);
+                send(ex, 200, targetUrl.get(), "text/plain");
+                return 200;
+            }
+
+            logWarn("Metadata not found for id=" + id);
+            send(ex, 404, "Short URL not found", "text/plain");
+            return 404;
+        } catch (Exception exception) {
+            observability.markError(span, exception);
+            logError("Metadata lookup failed for id=" + id, exception);
+            throw exception;
+        } finally {
+            span.end();
+        }
+    }
+
+    private int delete(HttpExchange ex, String id) throws Exception {
+        Span span = observability.startChildSpan("http.delete_short_link");
+        try (Scope ignored = span.makeCurrent()) {
+            logDebug("Delete requested for id=" + id);
+            long dbStart = System.nanoTime();
+            boolean deleted = linker.deleteShortLink(id, db);
+            observability.recordDatabaseOperation("DELETE", elapsedMillis(dbStart));
+
+            if (deleted) {
+                span.setAttribute("linker.short_id", id);
+                logInfo("Short URL deleted: id=" + id);
+                ex.sendResponseHeaders(204, -1);
+                ex.close();
+                return 204;
+            }
+
+            logWarn("Delete requested for unknown id=" + id);
+            send(ex, 404, "Short URL not found", "text/plain");
+            return 404;
+        } catch (Exception exception) {
+            observability.markError(span, exception);
+            logError("Delete failed for id=" + id, exception);
             throw exception;
         } finally {
             span.end();
@@ -277,6 +340,12 @@ public class LinkerHttpHandler implements HttpHandler {
         }
         if (path.startsWith("/css/") || path.startsWith("/js/")) {
             return "static-asset";
+        }
+        if (method.equalsIgnoreCase("HEAD")) {
+            return "short-link-metadata";
+        }
+        if (method.equalsIgnoreCase("DELETE")) {
+            return "delete-short-link";
         }
         return "redirect-short-link";
     }

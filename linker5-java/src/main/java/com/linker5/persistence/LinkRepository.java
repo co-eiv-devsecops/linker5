@@ -41,4 +41,11 @@ public class LinkRepository {
             }
         }
     }
+
+    public boolean deleteById(Connection connection, String id) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("DELETE FROM shorturl WHERE id=?")) {
+            statement.setString(1, id);
+            return statement.executeUpdate() > 0;
+        }
+    }
 }
