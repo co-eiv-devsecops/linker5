@@ -15,12 +15,16 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 public class LinkerHttpHandler implements HttpHandler {
 
     private static final String APPLICATION_JSON = "application/json";
+    private static final Set<String> STATIC_ASSET_DIRECTORIES = Set.of("css", "js");
+    private static final Pattern STATIC_ASSET_FILE_NAME = Pattern.compile("[A-Za-z0-9_.-]+");
 
     private final Linker linker;
     private final Connection db;
@@ -59,7 +63,14 @@ public class LinkerHttpHandler implements HttpHandler {
                 return;
             }
             if (path.startsWith("/css/") || path.startsWith("/js/")) {
-                status = serveStatic(ex, path.substring(1));
+                String staticAssetPath = path.substring(1);
+                if (!isSafeStaticAssetPath(staticAssetPath)) {
+                    logWarn("Rejected static asset request outside the allowed directory: " + staticAssetPath);
+                    send(ex, 404, "Not found", "text/plain");
+                    status = 404;
+                    return;
+                }
+                status = serveStatic(ex, staticAssetPath);
                 return;
             }
             if (path.equals("/healthz")) {
@@ -235,6 +246,18 @@ public class LinkerHttpHandler implements HttpHandler {
         ex.getResponseBody().write(bytes);
         observability.recordResponseSize(bytes.length);
         ex.close();
+    }
+
+    static boolean isSafeStaticAssetPath(String file) {
+        int separatorIndex = file.indexOf('/');
+        if (separatorIndex < 0) {
+            return false;
+        }
+        String directory = file.substring(0, separatorIndex);
+        String name = file.substring(separatorIndex + 1);
+        return STATIC_ASSET_DIRECTORIES.contains(directory)
+                && !name.isEmpty()
+                && STATIC_ASSET_FILE_NAME.matcher(name).matches();
     }
 
     static String resolveRoute(String path, String method) {

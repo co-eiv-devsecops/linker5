@@ -125,6 +125,30 @@ class LinkerHttpHandlerTest {
     }
 
     @Test
+    void shouldRejectStaticFileRequestsAttemptingPathTraversal() throws Exception {
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            LinkerHttpHandler handler = newHandler(connection, defaultLinker(new LinkRepository()));
+            FakeHttpExchange exchange = new FakeHttpExchange("GET", "/css/../../pom.xml", "", LOCALHOST_HOST);
+
+            handler.handle(exchange);
+
+            assertEquals(404, exchange.statusCode);
+            assertEquals("Not found", exchange.responseAsText());
+        }
+    }
+
+    @Test
+    void shouldRejectStaticFileRequestsWithNestedPaths() {
+        assertTrue(LinkerHttpHandler.isSafeStaticAssetPath("css/style.css"));
+        assertTrue(LinkerHttpHandler.isSafeStaticAssetPath("js/app.js"));
+        assertEquals(false, LinkerHttpHandler.isSafeStaticAssetPath("css/../../pom.xml"));
+        assertEquals(false, LinkerHttpHandler.isSafeStaticAssetPath("css/sub/style.css"));
+        assertEquals(false, LinkerHttpHandler.isSafeStaticAssetPath("img/logo.png"));
+        assertEquals(false, LinkerHttpHandler.isSafeStaticAssetPath("css/"));
+        assertEquals(false, LinkerHttpHandler.isSafeStaticAssetPath("css"));
+    }
+
+    @Test
     void shouldRedirectWhenShortLinkExists() throws Exception {
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             LinkRepository repository = new LinkRepository();
