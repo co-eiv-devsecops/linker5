@@ -4,8 +4,9 @@ name: Blue-Green Deploy
 #   1. Build the jar.
 #   2. Launch a fresh "green" VM (cloned from the current "blue" placement).
 #   3. Deploy the jar to green and run health + functional tests.
-#   4. On success: switch the active pointer (OCI_INSTANCE_OCID) to green and
-#      terminate blue.
+#   4. On success: switch Load Balancer traffic to green (register green backend,
+#      wait until healthy, remove blue backend), update the deploy pointer, and
+#      optionally terminate blue (only when retire_blue = true).
 #   5. On failure: terminate green; blue keeps serving untouched.
 
 on:
@@ -15,6 +16,11 @@ on:
         description: "Display name for the new (green) instance"
         required: false
         default: "linker5-green"
+      retire_blue:
+        description: "Terminate the old (blue) instance after a successful switchover"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: blue-green-production
@@ -259,7 +265,7 @@ jobs:
             echo "All health and functional tests passed on green."
 
   switchover:
-    name: Switchover to Green & Retire Blue
+    name: Switchover to Green via Load Balancer
     runs-on: ubuntu-latest
     needs: [launch-green, deploy-green]
     if: ${{ success() }}
@@ -288,20 +294,35 @@ jobs:
           key_file=${HOME}/.oci/oci_api_key.pem
           EOF
           chmod 600 "${HOME}/.oci/config"
-      - name: Point active instance (OCI_INSTANCE_OCID) to green
+      - name: Switch Load Balancer traffic to green
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source infra/linker.env
+          scripts/bluegreen/switch-lb-backend.sh \
+            "$OCI_LB_OCID" \
+            "$OCI_LB_LINKER_BACKEND" \
+            "${{ needs.launch-green.outputs.green }}" \
+            "${{ needs.launch-green.outputs.blue }}"
+      - name: Update deploy pointer (OCI_INSTANCE_OCID) to green
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
           GREEN="${{ needs.launch-green.outputs.green }}"
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GH_PAT secret not set; cannot update OCI_INSTANCE_OCID automatically."
-            echo "Set the repo variable OCI_INSTANCE_OCID to: ${GREEN}"
-            exit 1
+          if [ -n "${GH_TOKEN:-}" ]; then
+            gh variable set OCI_INSTANCE_OCID --repo "${{ github.repository }}" --body "${GREEN}"
+            echo "Deploy pointer OCI_INSTANCE_OCID updated to green: ${GREEN}"
+          else
+            # Not fatal: LB traffic already points at green. The deploy pointer is
+            # only used by the CD pipeline and can be updated manually (the PAT
+            # needs org approval).
+            echo "::warning::GH_PAT not set — update the deploy pointer manually."
+            echo "Run: gh variable set OCI_INSTANCE_OCID --repo ${{ github.repository }} --body ${GREEN}"
           fi
-          gh variable set OCI_INSTANCE_OCID --repo "${{ github.repository }}" --body "${GREEN}"
-          echo "Active instance switched to green: ${GREEN}"
       - name: Retire blue instance
+        # Only when explicitly requested, so grading traffic is never dropped by accident.
+        if: ${{ github.event.inputs.retire_blue == 'true' }}
         run: scripts/bluegreen/terminate-instance.sh "${{ needs.launch-green.outputs.blue }}"
 
   rollback:
