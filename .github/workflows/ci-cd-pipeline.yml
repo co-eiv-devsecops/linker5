@@ -221,11 +221,22 @@ jobs:
 
       - name: Package Azure Functions artifact
         run: >-
-          mvn -B -f linker5-java/pom.xml -DskipTests
+          mvn -B -f linker5-java/pom.xml -DskipTests package
           -Dazure.functions.appName="${AZURE_FUNCTION_APP_NAME}"
           -Dazure.functions.resourceGroup="${AZURE_RESOURCE_GROUP}"
           -Dazure.functions.region="${AZURE_REGION}"
           azure-functions:package
+
+      - name: Verify Azure package output exists
+        run: |
+          set -euo pipefail
+          OUTPUT_DIR="linker5-java/target/azure-functions/${AZURE_FUNCTION_APP_NAME}"
+          if [ ! -d "$OUTPUT_DIR" ]; then
+            echo "Azure Functions package directory was not generated: $OUTPUT_DIR"
+            find linker5-java/target -maxdepth 3 -type d | sort || true
+            exit 1
+          fi
+          test -f "$OUTPUT_DIR/host.json"
 
       - name: Upload Azure Functions package
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
