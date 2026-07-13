@@ -29,7 +29,12 @@ IMAGE_ID="$(printf '%s' "${BLUE_JSON}" | jq -r '.data."image-id" // .data."sourc
 OCPUS="$(printf '%s' "${BLUE_JSON}" | jq -r '.data."shape-config".ocpus // empty')"
 MEMORY_GBS="$(printf '%s' "${BLUE_JSON}" | jq -r '.data."shape-config"."memory-in-gbs" // empty')"
 
-SUBNET_ID="$(oci compute instance list-vnics --instance-id "${BLUE_OCID}" | jq -r '.data[0]."subnet-id"')"
+BLUE_VNIC="$(oci compute instance list-vnics --instance-id "${BLUE_OCID}")"
+SUBNET_ID="$(printf '%s' "${BLUE_VNIC}" | jq -r '.data[0]."subnet-id"')"
+# Copy the blue VNIC's NSGs so the Load Balancer health checker can reach green
+# on the app port (same network security as blue; otherwise green is CRITICAL
+# with "Connection failed" even though the app is up).
+NSG_IDS="$(printf '%s' "${BLUE_VNIC}" | jq -c '.data[0]."nsg-ids" // []')"
 
 if [ -z "${IMAGE_ID}" ] || [ "${IMAGE_ID}" = "null" ]; then
   IMAGE_ID="${IMAGE_OCID:?could not derive image OCID from blue; set IMAGE_OCID to override}"
@@ -37,6 +42,7 @@ fi
 
 log "compartment=${COMPARTMENT_ID}"
 log "ad=${AVAILABILITY_DOMAIN} shape=${SHAPE} subnet=${SUBNET_ID}"
+log "nsg-ids=${NSG_IDS}"
 
 launch_args=(
   --compartment-id "${COMPARTMENT_ID}"
@@ -57,6 +63,11 @@ launch_args=(
 # Flexible shapes require an explicit shape-config.
 if printf '%s' "${SHAPE}" | grep -qi 'Flex'; then
   launch_args+=(--shape-config "{\"ocpus\": ${OCPUS:-1}, \"memoryInGBs\": ${MEMORY_GBS:-12}}")
+fi
+
+# Attach the same NSGs as blue so the LB can health-check green on the app port.
+if [ -n "${NSG_IDS}" ] && [ "${NSG_IDS}" != "[]" ]; then
+  launch_args+=(--nsg-ids "${NSG_IDS}")
 fi
 
 log "Launching green instance '${GREEN_NAME}'..."
