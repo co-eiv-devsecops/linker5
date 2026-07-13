@@ -205,20 +205,7 @@ runs:
         set -euo pipefail
 
         session_id="$({
-          printf '%s' "$SESSION_CREATE_OUTPUT" | python3 -c '
-import json
-import sys
-
-payload = json.load(sys.stdin)
-resources = payload.get("data", {}).get("resources", [])
-for resource in resources:
-    if resource.get("entity-type") == "SessionResource" and resource.get("action-type") == "CREATED":
-        identifier = resource.get("identifier", "").strip()
-        if identifier:
-            print(identifier)
-            raise SystemExit(0)
-raise SystemExit(1)
-'
+          SESSION_CREATE_OUTPUT="$SESSION_CREATE_OUTPUT" python3 -c 'import json, os, sys; resources = json.loads(os.environ["SESSION_CREATE_OUTPUT"]).get("data", {}).get("resources", []); matches = [resource.get("identifier", "").strip() for resource in resources if resource.get("entity-type") == "SessionResource" and resource.get("action-type") == "CREATED" and resource.get("identifier", "").strip()]; print(matches[0] if matches else ""); sys.exit(0 if matches else 1)'
         } || true)"
         if [[ -z "$session_id" || "$session_id" == "null" ]]; then
           echo "::error::Could not determine Bastion session OCID from create-managed-ssh output."
