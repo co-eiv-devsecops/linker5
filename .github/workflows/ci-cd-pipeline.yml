@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/pipeline-observability-validation
   pull_request:
     branches:
       - main
@@ -133,7 +132,7 @@ jobs:
         uses: ./.github/actions/package-oci
 
       - name: Upload executable jar
-        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v7
         with:
           name: linker-oci-vm-artifact
@@ -164,7 +163,7 @@ jobs:
           azure-region: ${{ vars.AZURE_REGION || 'mexicocentral' }}
 
       - name: Upload Azure Functions package
-        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v7
         with:
           name: linker-azure-functions-artifact
@@ -175,7 +174,7 @@ jobs:
     name: Deploy to OCI VM
     runs-on: ubuntu-latest
     needs: package-oci
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     environment:
       name: production
@@ -215,7 +214,7 @@ jobs:
     name: Verify OCI VM deployment
     runs-on: ubuntu-latest
     needs: deploy-oci
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - name: Checkout repository
@@ -241,7 +240,7 @@ jobs:
     name: Deploy to Azure Functions
     runs-on: ubuntu-latest
     needs: package-azure
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     environment:
       name: production
@@ -270,7 +269,7 @@ jobs:
     name: Verify Azure Functions deployment
     runs-on: ubuntu-latest
     needs: deploy-azure
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - name: Checkout repository
@@ -285,7 +284,7 @@ jobs:
     name: Verify OCI VM observability configuration and traffic
     runs-on: ubuntu-latest
     needs: verify-oci
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - name: Checkout repository
@@ -311,7 +310,7 @@ jobs:
     name: Verify Azure Functions observability configuration and traffic
     runs-on: ubuntu-latest
     needs: verify-azure
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     environment:
       name: production
