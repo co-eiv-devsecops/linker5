@@ -53,7 +53,7 @@ runs:
   using: composite
   steps:
     - name: Deploy to OCI VM
-      uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+      uses: ./.github/actions/oci-bastion-deploy
       env:
         DEPLOYMENT_PRIVATE_KEY: ${{ inputs.deployment-private-key }}
         DEPLOYMENT_PUBLIC_KEY: ${{ inputs.deployment-public-key }}
