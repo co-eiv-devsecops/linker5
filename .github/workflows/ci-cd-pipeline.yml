@@ -265,6 +265,7 @@ jobs:
       OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
       OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
       OTEL_SERVICE_NAME: linker5-java
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=oci,cloud.provider=oracle
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
@@ -348,6 +349,7 @@ jobs:
             Environment=LINKER_OTEL_LOG_EXPORT=true
             Environment=FEATURE_REDIRECTS_ENABLED=true
             Environment=OTEL_SERVICE_NAME=linker5-java
+            Environment=OTEL_RESOURCE_ATTRIBUTES=deployment.environment=oci,cloud.provider=oracle
             Environment=OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
             Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
             Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
@@ -480,6 +482,14 @@ jobs:
           AZURE_MYSQL_PWD="${AZURE_MYSQL_PWD}"
           FEATURE_REDIRECTS_ENABLED=true
           LINKER_LOG_LEVEL=INFO
+          LINKER_OTEL_LOG_EXPORT=true
+          OTEL_SERVICE_NAME=linker5-java
+          OTEL_RESOURCE_ATTRIBUTES=deployment.environment=azure,cloud.provider=azure
+          OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+          OTEL_EXPORTER_OTLP_HEADERS="${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}"
           AzureWebJobsDisableHomepage=true
 
       - name: Deploy Azure Function package
