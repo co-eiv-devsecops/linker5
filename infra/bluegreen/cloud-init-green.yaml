@@ -21,3 +21,8 @@ runcmd:
   - bash -c '. /etc/os-release; echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/adoptium.list'
   - apt-get update
   - apt-get install -y temurin-21-jre
+  # OCI Ubuntu images ship an iptables INPUT chain that REJECTs everything except
+  # SSH. Open the app port (8080) so the Load Balancer health checker and traffic
+  # can reach Linker, matching the blue instance, then persist it across reboots.
+  - iptables -I INPUT -p tcp -m tcp --dport 8080 -m state --state NEW -j ACCEPT
+  - bash -c 'netfilter-persistent save || iptables-save > /etc/iptables/rules.v4 || true'
