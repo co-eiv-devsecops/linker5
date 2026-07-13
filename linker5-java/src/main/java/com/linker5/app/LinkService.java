@@ -1,7 +1,5 @@
 package com.linker5.app;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.linker5.ids.ShortIdGenerator;
 import com.linker5.ids.UuidShortIdGenerator;
 import com.linker5.persistence.LinkRepository;
@@ -17,28 +15,26 @@ import java.util.Set;
 
 public class LinkService {
 
-    private static final String ALIAS_FIELD = "alias";
     private static final Set<String> ALLOWED_URL_SCHEMES = Set.of("http", "https");
 
-    private final Gson gson;
     private final LinkRepository repository;
     private final ShortIdGenerator idGenerator;
 
     public LinkService() {
-        this(new Gson(), new LinkRepository(), new UuidShortIdGenerator());
+        this(new LinkRepository(), new UuidShortIdGenerator());
     }
 
-    public LinkService(Gson gson, LinkRepository repository, ShortIdGenerator idGenerator) {
-        this.gson = gson;
+    public LinkService(LinkRepository repository, ShortIdGenerator idGenerator) {
         this.repository = repository;
         this.idGenerator = idGenerator;
     }
 
-    public CreateLinkResult createShortLink(String requestBody, String host, Connection connection) throws Exception {
-        String url = extractUrl(requestBody);
+    public CreateLinkResult createShortLink(CreateShortLinkRequest request, Connection connection) throws SQLException {
+        String url = extractUrl(request);
         validateAbsoluteUrl(url);
+        validatePublicBaseUrl(request.publicBaseUrl());
 
-        String id = resolveId(requestBody, connection);
+        String id = resolveId(request, connection);
         try {
             repository.save(connection, id, url);
         } catch (SQLException exception) {
@@ -48,7 +44,7 @@ public class LinkService {
             throw exception;
         }
 
-        return new CreateLinkResult(id, buildShortUrl(host, id));
+        return new CreateLinkResult(id, buildShortUrl(request.publicBaseUrl(), id));
     }
 
     boolean isDuplicateShortLinkId(SQLException exception) {
@@ -58,8 +54,8 @@ public class LinkService {
         return exception.getMessage() != null && exception.getMessage().contains("UNIQUE constraint failed: shorturl.id");
     }
 
-    private String resolveId(String requestBody, Connection connection) throws Exception {
-        Optional<String> alias = extractAlias(requestBody);
+    private String resolveId(CreateShortLinkRequest request, Connection connection) throws SQLException {
+        Optional<String> alias = extractAlias(request);
         if (alias.isEmpty()) {
             return idGenerator.generate();
         }
@@ -74,25 +70,20 @@ public class LinkService {
         return requestedAlias;
     }
 
-    Optional<String> extractAlias(String requestBody) {
-        JsonObject payload = gson.fromJson(requestBody, JsonObject.class);
-        if (payload.has(ALIAS_FIELD) && !payload.get(ALIAS_FIELD).isJsonNull()) {
-            return Optional.of(payload.get(ALIAS_FIELD).getAsString());
-        }
-        return Optional.empty();
+    Optional<String> extractAlias(CreateShortLinkRequest request) {
+        return Optional.ofNullable(request.alias());
     }
 
-    public Optional<String> resolveShortLink(String id, Connection connection) throws Exception {
+    public Optional<String> resolveShortLink(String id, Connection connection) throws SQLException {
         validateShortLinkId(id);
         return repository.findUrlById(connection, id);
     }
 
-    String extractUrl(String requestBody) {
-        JsonObject payload = gson.fromJson(requestBody, JsonObject.class);
-        if (payload == null || !payload.has("url") || payload.get("url").isJsonNull()) {
+    String extractUrl(CreateShortLinkRequest request) {
+        if (request == null || request.url() == null) {
             throw new IllegalArgumentException("Missing 'url'");
         }
-        return payload.get("url").getAsString();
+        return request.url();
     }
 
     void validateAbsoluteUrl(String url) {
@@ -114,7 +105,17 @@ public class LinkService {
         }
     }
 
-    String buildShortUrl(String host, String id) {
-        return String.format("http://%s/%s", host, id);
+    void validatePublicBaseUrl(String publicBaseUrl) {
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            throw new IllegalArgumentException("Invalid public base URL");
+        }
+        validateAbsoluteUrl(publicBaseUrl);
+    }
+
+    String buildShortUrl(String publicBaseUrl, String id) {
+        String normalizedBaseUrl = publicBaseUrl.endsWith("/")
+                ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
+                : publicBaseUrl;
+        return String.format("%s/%s", normalizedBaseUrl, id);
     }
 }

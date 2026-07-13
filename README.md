@@ -1,9 +1,24 @@
 # Linker
 
-[![CI/CD Pipeline](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml/badge.svg?branch=main)](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml)
+[![CI/CD Pipeline](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml/badge.svg?branch=main)](http://5.n-la-c.app/c87c006d)
+
+**Producción:** [5.n-la-c.app](http://5.n-la-c.app/5bf191c7) (OCI VM tras Load Balancer) · [Azure Functions](http://5.n-la-c.app/17b47df9) (serverless)
 
 Linker is a monolithic URL shortener: it turns a long URL into a short one that
-redirects. Single-file backend (`< 100` lines) plus a small static UI.
+redirects. Java backend plus a small static UI.
+
+## Documentación
+
+El índice completo (y el mapa de cumplimiento de requisitos del curso) está en
+[`docs/README.md`](docs/README.md):
+
+Los links de navegación son short links generados por nuestro propio Linker:
+
+- [`docs/API.md`](http://5.n-la-c.app/1de3bdd1) — API HTTP: `POST /link`, `GET /<id>`, `HEAD /<id>` (metadata), `DELETE /<id>`, `/healthz`
+- [`docs/DESPLIEGUE.md`](http://5.n-la-c.app/7394b680) — pipeline CI/CD, entorno efímero de pruebas, despliegue Blue-Green 🟢 🔵 y objetivo serverless en Azure Functions
+- [`docs/LANZAMIENTOS.md`](http://5.n-la-c.app/d1d4c892) — lanzamientos con feature flags, separados del despliegue
+- [`docs/MONITOREO.md`](http://5.n-la-c.app/61d63272) — monitoreo post-despliegue con Grafana
+- [`docs/OPERACIONES.md`](http://5.n-la-c.app/771bf4ab) — runbook: onboarding, scripts, 0 operaciones manuales en OCI/Azure
 
 ## Integrantes
 
@@ -16,9 +31,14 @@ redirects. Single-file backend (`< 100` lines) plus a small static UI.
 
 | Path | What it is |
 |------|------------|
-| `linker5-java/` | The Linker app (single-file `Main.java`, < 100 lines) + static UI |
+| `linker5-java/` | The Linker app (Java 21, shared core + OCI/Azure adapters) + static UI |
+| `docs/` | Project documentation: API, deployment, launches, monitoring, operations |
 | `scripts/deploy.sh` | Deployment script (build, restart service, healthcheck) |
+| `scripts/bluegreen/` | Blue-Green scripts: launch green, LB switchover, terminate instance |
+| `scripts/provision-azure.sh` | One-time bootstrap of the Azure Functions target (az CLI) |
+| `scripts/shorten-url.sh` | Creates a short link via the Linker API |
 | `scripts/linker.service` | systemd unit that runs Linker on the VM |
+| `infra/bluegreen/` | Blue-Green infra: cloud-init for green + [README](infra/bluegreen/README.md) |
 | `infra/terraform/` | Infrastructure as Code: creates a VM with everything to run Linker (environment parity) — see its [README](infra/terraform/README.md) |
 | `.devcontainer/` | Coded development environment (JDK 21 + Maven) usable via Codespaces — see its [README](.devcontainer/README.md) |
 
@@ -29,6 +49,67 @@ cd linker5-java
 mvn clean package -DskipTests
 java -jar target/*-jar-with-dependencies.jar   # serves on http://localhost:8080/
 ```
+
+## Deployment targets
+
+Linker now supports two deploy targets with the same core use cases:
+
+- OCI VM: keeps the current fat-jar + systemd deployment and uses `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PWD`.
+- Azure Functions: packages an HTTP-triggered Java Functions app and uses `AZURE_MYSQL_HOST`, `AZURE_MYSQL_DATABASE`, `AZURE_MYSQL_USER`, `AZURE_MYSQL_PWD`.
+
+The runtime keeps OCI compatibility. Azure reads the Azure-specific variable names without requiring OCI secrets to be renamed.
+
+### Azure Functions packaging
+
+```bash
+cd linker5-java
+mvn -DskipTests \
+  -Dazure.functions.appName="your-function-app" \
+  -Dazure.functions.resourceGroup="your-resource-group" \
+  -Dazure.functions.region="mexicocentral" \
+  azure-functions:package
+```
+
+The Azure package is written to `linker5-java/target/azure-functions/<app-name>/`.
+
+### Azure route support
+
+The Azure Functions target exposes:
+
+- `GET /`
+- `GET /css/*`
+- `GET /js/*`
+- `POST /link`
+- `GET /{id}`
+- `HEAD /{id}`
+- `DELETE /{id}`
+- `GET /healthz`
+
+Both deploy targets reuse the same `src/main/resources/wwwroot` assets, so OCI and Azure serve the same frontend without duplicating files.
+
+### GitHub Actions secrets and variables
+
+OCI deploy continues using the existing OCI and `MYSQL_*` secrets.
+
+Azure deploy requires these GitHub secrets:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_MYSQL_HOST`
+- `AZURE_MYSQL_DATABASE`
+- `AZURE_MYSQL_USER`
+- `AZURE_MYSQL_PWD`
+
+Azure deploy also requires these repository/environment variables:
+
+- `AZURE_FUNCTION_APP_NAME`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_REGION` (recommended value: `mexicocentral`)
+
+### Azure bootstrap
+
+Use `scripts/provision-azure.sh` to create the Function App, storage account, MySQL Flexible Server, and the Azure-specific app settings expected by the Functions target.
 
 ## Observability configuration
 
@@ -115,6 +196,9 @@ curl -X POST http://localhost:8080/link \
   -H "Content-Type: application/json" \
   -d '{"url":"https://www.google.com"}'
 ```
+
+Full API reference (redirect, `HEAD` metadata, `DELETE`, healthcheck) in
+[`docs/API.md`](docs/API.md).
 
 ## Development environment (DevContainer)
 

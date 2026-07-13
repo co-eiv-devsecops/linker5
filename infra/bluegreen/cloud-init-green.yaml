@@ -1,0 +1,23 @@
+#cloud-config
+# Minimal provisioning for a blue-green "green" VM.
+# It only installs a Java 21 runtime; the application jar, the systemd unit and
+# the service start are delivered afterwards by the deploy step (the same
+# oci-bastion-deploy flow used for prod), so green ends up identical to blue.
+#
+# Temurin is used (instead of the distro openjdk-21 package) because it installs
+# cleanly on any Ubuntu release, including 20.04 where openjdk-21 is not in apt.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - wget
+  - gnupg
+  - apt-transport-https
+
+runcmd:
+  - install -d -m 0755 /etc/apt/keyrings
+  - bash -c 'wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg'
+  - bash -c '. /etc/os-release; echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/adoptium.list'
+  - apt-get update
+  - apt-get install -y temurin-21-jre

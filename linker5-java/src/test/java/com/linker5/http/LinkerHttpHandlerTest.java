@@ -3,6 +3,7 @@ package com.linker5.http;
 import com.google.gson.Gson;
 import com.linker5.app.LinkService;
 import com.linker5.app.Linker;
+import com.linker5.app.LinkerUseCases;
 import com.linker5.flags.EnvFeatureFlagProvider;
 import com.linker5.observability.NoopAppObservability;
 import com.linker5.persistence.LinkRepository;
@@ -35,6 +36,12 @@ class LinkerHttpHandlerTest {
     private static final String CREATE_LINK_PATH = "/link";
     private static final String LOCALHOST_HOST = "localhost:8080";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
+    private static final String SHORT_LINK_ID = "abc12345";
+    private static final String TARGET_URL = "https://example.com/target";
+    private static final String SHORT_LINK_PATH = "/abc12345";
+    private static final String MISSING_ID_PATH = "/missing-id";
+    private static final String SHORT_URL_NOT_FOUND = "Short URL not found";
+    private static final String HTTP_DELETE = "DELETE";
 
     @Test
     void shouldCreateShortLinkFromPostRequest() throws Exception {
@@ -86,6 +93,21 @@ class LinkerHttpHandlerTest {
             assertEquals(400, exchange.statusCode);
             assertEquals("{\"error\":\"Missing 'url'\"}", exchange.responseAsText());
             assertEquals("application/json", exchange.getResponseHeaders().getFirst(CONTENT_TYPE_HEADER));
+        }
+    }
+
+    @Test
+    void shouldRejectInvalidJsonInPostRequest() throws Exception {
+        try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
+            LinkRepository repository = new LinkRepository();
+            repository.initializeSchema(connection);
+            LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
+
+            FakeHttpExchange exchange = new FakeHttpExchange("POST", CREATE_LINK_PATH, "{", LOCALHOST_HOST);
+            handler.handle(exchange);
+
+            assertEquals(400, exchange.statusCode);
+            assertEquals("{\"error\":\"Invalid JSON\"}", exchange.responseAsText());
         }
     }
 
@@ -153,15 +175,15 @@ class LinkerHttpHandlerTest {
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             LinkRepository repository = new LinkRepository();
             repository.initializeSchema(connection);
-            repository.save(connection, "abc12345", "https://example.com/target");
+            repository.save(connection, SHORT_LINK_ID, TARGET_URL);
             Linker linker = new Linker(new LinkService(), new RedirectHandler(repository, flagName -> true), repository);
             LinkerHttpHandler handler = newHandler(connection, linker);
 
-            FakeHttpExchange exchange = new FakeHttpExchange("GET", "/abc12345", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange("GET", SHORT_LINK_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(302, exchange.statusCode);
-            assertEquals("https://example.com/target", exchange.getResponseHeaders().getFirst("Location"));
+            assertEquals(TARGET_URL, exchange.getResponseHeaders().getFirst("Location"));
         }
     }
 
@@ -172,11 +194,11 @@ class LinkerHttpHandlerTest {
             repository.initializeSchema(connection);
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
 
-            FakeHttpExchange exchange = new FakeHttpExchange("GET", "/missing-id", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange("GET", MISSING_ID_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(404, exchange.statusCode);
-            assertEquals("Short URL not found", exchange.responseAsText());
+            assertEquals(SHORT_URL_NOT_FOUND, exchange.responseAsText());
         }
     }
 
@@ -185,14 +207,14 @@ class LinkerHttpHandlerTest {
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             LinkRepository repository = new LinkRepository();
             repository.initializeSchema(connection);
-            repository.save(connection, "abc12345", "https://example.com/target");
+            repository.save(connection, SHORT_LINK_ID, TARGET_URL);
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
 
-            FakeHttpExchange exchange = new FakeHttpExchange("HEAD", "/abc12345", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange("HEAD", SHORT_LINK_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(200, exchange.statusCode);
-            assertEquals("https://example.com/target", exchange.responseAsText());
+            assertEquals(TARGET_URL, exchange.responseAsText());
             assertEquals("text/plain", exchange.getResponseHeaders().getFirst(CONTENT_TYPE_HEADER));
         }
     }
@@ -204,11 +226,11 @@ class LinkerHttpHandlerTest {
             repository.initializeSchema(connection);
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
 
-            FakeHttpExchange exchange = new FakeHttpExchange("HEAD", "/missing-id", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange("HEAD", MISSING_ID_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(404, exchange.statusCode);
-            assertEquals("Short URL not found", exchange.responseAsText());
+            assertEquals(SHORT_URL_NOT_FOUND, exchange.responseAsText());
         }
     }
 
@@ -217,15 +239,15 @@ class LinkerHttpHandlerTest {
         try (Connection connection = DriverManager.getConnection(IN_MEMORY_SQLITE_URL)) {
             LinkRepository repository = new LinkRepository();
             repository.initializeSchema(connection);
-            repository.save(connection, "abc12345", "https://example.com/target");
+            repository.save(connection, SHORT_LINK_ID, TARGET_URL);
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
 
-            FakeHttpExchange exchange = new FakeHttpExchange("DELETE", "/abc12345", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange(HTTP_DELETE, SHORT_LINK_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(204, exchange.statusCode);
             assertEquals("", exchange.responseAsText());
-            assertTrue(repository.findUrlById(connection, "abc12345").isEmpty());
+            assertTrue(repository.findUrlById(connection, SHORT_LINK_ID).isEmpty());
         }
     }
 
@@ -236,11 +258,11 @@ class LinkerHttpHandlerTest {
             repository.initializeSchema(connection);
             LinkerHttpHandler handler = newHandler(connection, defaultLinker(repository));
 
-            FakeHttpExchange exchange = new FakeHttpExchange("DELETE", "/missing-id", "", LOCALHOST_HOST);
+            FakeHttpExchange exchange = new FakeHttpExchange(HTTP_DELETE, MISSING_ID_PATH, "", LOCALHOST_HOST);
             handler.handle(exchange);
 
             assertEquals(404, exchange.statusCode);
-            assertEquals("Short URL not found", exchange.responseAsText());
+            assertEquals(SHORT_URL_NOT_FOUND, exchange.responseAsText());
         }
     }
 
@@ -260,17 +282,18 @@ class LinkerHttpHandlerTest {
         assertEquals("create-short-link", LinkerHttpHandler.resolveRoute(CREATE_LINK_PATH, "POST"));
         assertEquals("root-ui", LinkerHttpHandler.resolveRoute("/", "GET"));
         assertEquals("static-asset", LinkerHttpHandler.resolveRoute("/css/style.css", "GET"));
-        assertEquals("redirect-short-link", LinkerHttpHandler.resolveRoute("/abc12345", "GET"));
-        assertEquals("short-link-metadata", LinkerHttpHandler.resolveRoute("/abc12345", "HEAD"));
-        assertEquals("delete-short-link", LinkerHttpHandler.resolveRoute("/abc12345", "DELETE"));
+        assertEquals("redirect-short-link", LinkerHttpHandler.resolveRoute(SHORT_LINK_PATH, "GET"));
+        assertEquals("short-link-metadata", LinkerHttpHandler.resolveRoute(SHORT_LINK_PATH, "HEAD"));
+        assertEquals("delete-short-link", LinkerHttpHandler.resolveRoute(SHORT_LINK_PATH, HTTP_DELETE));
+        assertEquals("http://" + LOCALHOST_HOST, LinkerHttpHandler.derivePublicBaseUrl(new FakeHttpExchange("POST", CREATE_LINK_PATH, "", LOCALHOST_HOST)));
         assertTrue(LinkerHttpHandler.elapsedMillis(System.nanoTime() - 2_000_000) >= 0);
     }
 
-    private static LinkerHttpHandler newHandler(Connection connection, Linker linker) {
+    private static LinkerHttpHandler newHandler(Connection connection, LinkerUseCases linker) {
         return new LinkerHttpHandler(linker, connection, new NoopAppObservability(), new Gson(), Logger.getLogger("LinkerHttpHandlerTest"));
     }
 
-    private static Linker defaultLinker(LinkRepository repository) {
+    private static LinkerUseCases defaultLinker(LinkRepository repository) {
         return new Linker(new LinkService(), new RedirectHandler(repository, new EnvFeatureFlagProvider()), repository);
     }
 
