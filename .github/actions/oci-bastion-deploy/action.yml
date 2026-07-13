@@ -181,35 +181,55 @@ runs:
 
     - name: Create managed SSH Bastion session
       id: create-session
-      uses: oracle-actions/run-oci-cli-command@v1.3.2
-      with:
-        command: >-
-          bastion session create-managed-ssh
-          --bastion-id "${{ steps.preflight.outputs.bastion-id }}"
-          --ssh-public-key-file "${{ steps.preflight.outputs.public-key-file }}"
-          --target-resource-id "${{ inputs.instance-id }}"
-          --target-os-username "${{ inputs.target-os-username }}"
-          --target-port "${{ inputs.target-port }}"
-          --key-type PUB
-          --session-ttl "${{ inputs.session-ttl }}"
-          --wait-for-state SUCCEEDED
-          --wait-interval-seconds 10
-        silent: false
+      shell: bash
+      env:
+        BASTION_ID: ${{ steps.preflight.outputs.bastion-id }}
+        PUBLIC_KEY_FILE: ${{ steps.preflight.outputs.public-key-file }}
+        TARGET_INSTANCE_ID: ${{ inputs.instance-id }}
+        TARGET_OS_USERNAME: ${{ inputs.target-os-username }}
+        TARGET_PORT: ${{ inputs.target-port }}
+        SESSION_TTL: ${{ inputs.session-ttl }}
+      run: |
+        set -euo pipefail
+
+        create_output_file="$(mktemp "${RUNNER_TEMP}/oci-bastion-create.XXXXXX.json")"
+        oci bastion session create-managed-ssh \
+          --bastion-id "$BASTION_ID" \
+          --ssh-public-key-file "$PUBLIC_KEY_FILE" \
+          --target-resource-id "$TARGET_INSTANCE_ID" \
+          --target-os-username "$TARGET_OS_USERNAME" \
+          --target-port "$TARGET_PORT" \
+          --key-type PUB \
+          --session-ttl "$SESSION_TTL" \
+          --wait-for-state SUCCEEDED \
+          --wait-interval-seconds 10 \
+          > "$create_output_file"
+
+        session_id="$({
+          CREATE_OUTPUT_FILE="$create_output_file" python3 -c 'import json, os, sys; payload = json.load(open(os.environ["CREATE_OUTPUT_FILE"], encoding="utf-8")); resources = payload.get("data", {}).get("resources", []); matches = [resource.get("identifier", "").strip() for resource in resources if resource.get("entity-type") == "SessionResource" and resource.get("action-type") == "CREATED" and resource.get("identifier", "").strip()]; print(matches[0] if matches else ""); sys.exit(0 if matches else 1)'
+        } || true)"
+
+        if [[ -z "$session_id" || "$session_id" == "null" ]]; then
+          echo "::error::Could not determine Bastion session OCID from create-managed-ssh output."
+          cat "$create_output_file"
+          exit 1
+        fi
+
+        echo "session-id=$session_id" >> "$GITHUB_OUTPUT"
+        echo "create-output-file=$create_output_file" >> "$GITHUB_OUTPUT"
+
     - name: Wait for active Bastion session
       id: wait-session
       shell: bash
       env:
-        SESSION_CREATE_OUTPUT: ${{ steps.create-session.outputs.raw_output }}
+        SESSION_ID: ${{ steps.create-session.outputs.session-id }}
         WORK_DIR: ${{ steps.preflight.outputs.work-dir }}
       run: |
         set -euo pipefail
 
-        session_id="$({
-          SESSION_CREATE_OUTPUT="$SESSION_CREATE_OUTPUT" python3 -c 'import json, os, sys; resources = json.loads(os.environ["SESSION_CREATE_OUTPUT"]).get("data", {}).get("resources", []); matches = [resource.get("identifier", "").strip() for resource in resources if resource.get("entity-type") == "SessionResource" and resource.get("action-type") == "CREATED" and resource.get("identifier", "").strip()]; print(matches[0] if matches else ""); sys.exit(0 if matches else 1)'
-        } || true)"
+        session_id="$(printf '%s' "$SESSION_ID" | tr -d '\r\n\"')"
         if [[ -z "$session_id" || "$session_id" == "null" ]]; then
-          echo "::error::Could not determine Bastion session OCID from create-managed-ssh output."
-          printf '%s\n' "$SESSION_CREATE_OUTPUT"
+          echo "::error::Create session step did not produce a valid Bastion session OCID."
           exit 1
         fi
 
@@ -274,11 +294,17 @@ runs:
         ssh -F "$SSH_CONFIG" oci-bastion-target "cd -- $target_q && DEPLOY_PATH=$target_q bash -s" < "$REMOTE_SCRIPT_FILE"
 
     - name: Delete Bastion session
-      if: ${{ always() && steps.create-session.outputs.raw_output != '' }}
-      uses: oracle-actions/run-oci-cli-command@v1.3.2
-      with:
-        command: >-
-          bastion session delete
-          --session-id "${{ steps.wait-session.outputs.session-id }}"
-          --force
-        silent: 'false'
+      if: ${{ always() && steps.wait-session.outputs.session-id != '' }}
+      shell: bash
+      env:
+        SESSION_ID: ${{ steps.wait-session.outputs.session-id }}
+      run: |
+        set -euo pipefail
+
+        session_id="$(printf '%s' "$SESSION_ID" | tr -d '\r\n\"')"
+        if [[ -z "$session_id" || "$session_id" == "null" ]]; then
+          echo "No Bastion session ID available for cleanup; skipping delete."
+          exit 0
+        fi
+
+        oci bastion session delete --session-id "$session_id" --force
