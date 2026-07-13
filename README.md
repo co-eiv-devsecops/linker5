@@ -1,9 +1,24 @@
 # Linker
 
-[![CI/CD Pipeline](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml/badge.svg?branch=main)](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml)
+[![CI/CD Pipeline](https://github.com/co-eiv-devsecops/linker5/actions/workflows/ci-cd-pipeline.yml/badge.svg?branch=main)](http://5.n-la-c.app/c87c006d)
+
+**Producción:** [5.n-la-c.app](http://5.n-la-c.app/5bf191c7) (OCI VM tras Load Balancer) · [Azure Functions](http://5.n-la-c.app/17b47df9) (serverless)
 
 Linker is a monolithic URL shortener: it turns a long URL into a short one that
-redirects. Single-file backend (`< 100` lines) plus a small static UI.
+redirects. Java backend plus a small static UI.
+
+## Documentación
+
+El índice completo (y el mapa de cumplimiento de requisitos del curso) está en
+[`docs/README.md`](docs/README.md):
+
+Los links de navegación son short links generados por nuestro propio Linker:
+
+- [`docs/API.md`](http://5.n-la-c.app/1de3bdd1) — API HTTP: `POST /link`, `GET /<id>`, `HEAD /<id>` (metadata), `DELETE /<id>`, `/healthz`
+- [`docs/DESPLIEGUE.md`](http://5.n-la-c.app/7394b680) — pipeline CI/CD, entorno efímero de pruebas, despliegue Blue-Green 🟢 🔵 y objetivo serverless en Azure Functions
+- [`docs/LANZAMIENTOS.md`](http://5.n-la-c.app/d1d4c892) — lanzamientos con feature flags, separados del despliegue
+- [`docs/MONITOREO.md`](http://5.n-la-c.app/61d63272) — monitoreo post-despliegue con Grafana
+- [`docs/OPERACIONES.md`](http://5.n-la-c.app/771bf4ab) — runbook: onboarding, scripts, 0 operaciones manuales en OCI/Azure
 
 ## Integrantes
 
@@ -16,9 +31,14 @@ redirects. Single-file backend (`< 100` lines) plus a small static UI.
 
 | Path | What it is |
 |------|------------|
-| `linker5-java/` | The Linker app (single-file `Main.java`, < 100 lines) + static UI |
+| `linker5-java/` | The Linker app (Java 21, shared core + OCI/Azure adapters) + static UI |
+| `docs/` | Project documentation: API, deployment, launches, monitoring, operations |
 | `scripts/deploy.sh` | Deployment script (build, restart service, healthcheck) |
+| `scripts/bluegreen/` | Blue-Green scripts: launch green, LB switchover, terminate instance |
+| `scripts/provision-azure.sh` | One-time bootstrap of the Azure Functions target (az CLI) |
+| `scripts/shorten-url.sh` | Creates a short link via the Linker API |
 | `scripts/linker.service` | systemd unit that runs Linker on the VM |
+| `infra/bluegreen/` | Blue-Green infra: cloud-init for green + [README](infra/bluegreen/README.md) |
 | `infra/terraform/` | Infrastructure as Code: creates a VM with everything to run Linker (environment parity) — see its [README](infra/terraform/README.md) |
 | `.devcontainer/` | Coded development environment (JDK 21 + Maven) usable via Codespaces — see its [README](.devcontainer/README.md) |
 
@@ -176,6 +196,9 @@ curl -X POST http://localhost:8080/link \
   -H "Content-Type: application/json" \
   -d '{"url":"https://www.google.com"}'
 ```
+
+Full API reference (redirect, `HEAD` metadata, `DELETE`, healthcheck) in
+[`docs/API.md`](docs/API.md).
 
 ## Development environment (DevContainer)
 
