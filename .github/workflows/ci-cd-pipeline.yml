@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/pipeline-observability-validation
   pull_request:
     branches:
       - main
