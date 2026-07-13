@@ -396,6 +396,9 @@ jobs:
       OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Verify OCI VM routes
         uses: ./.github/actions/verify-oci
         with:
@@ -488,6 +491,9 @@ jobs:
       AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Verify Azure Function routes
         uses: ./.github/actions/verify-azure-routes
         with:
@@ -511,6 +517,9 @@ jobs:
       OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Verify OCI VM OTEL settings and emit synthetic traffic
         uses: ./.github/actions/verify-oci-observability
         with:
@@ -544,6 +553,9 @@ jobs:
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Verify Azure Function OTEL settings and emit synthetic traffic
         uses: ./.github/actions/verify-azure-observability
         with:
