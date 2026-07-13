@@ -8,11 +8,11 @@ con su entorno efímero de pruebas, y el procedimiento de despliegue
 
 Regla de oro: **todo despliegue pasa por GitHub Actions**. No se hacen
 operaciones manuales en la consola de OCI (ver
-[OPERACIONES.md](OPERACIONES.md#0-operaciones-manuales-en-la-consola-de-oci)).
+[OPERACIONES.md](http://5.n-la-c.app/f8b20235)).
 
 ## Pipeline CI/CD (`ci-cd-pipeline.yml`)
 
-Workflow: [`.github/workflows/ci-cd-pipeline.yml`](../.github/workflows/ci-cd-pipeline.yml)
+Workflow: [`.github/workflows/ci-cd-pipeline.yml`](http://5.n-la-c.app/2a547e35)
 
 Se dispara en cada `push`/`pull_request` a `main` (y manualmente con
 `workflow_dispatch`). El mismo pipeline despliega a **dos objetivos de PROD**:
