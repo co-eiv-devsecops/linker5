@@ -194,20 +194,35 @@ runs:
           --session-ttl "${{ inputs.session-ttl }}"
           --wait-for-state SUCCEEDED
           --wait-interval-seconds 10
-          --raw-output
-        query: 'data.resources[?"entity-type"==''SessionResource'' && "action-type"==''CREATED''].identifier | [0]'
         silent: false
     - name: Wait for active Bastion session
       id: wait-session
       shell: bash
       env:
-        SESSION_ID: ${{ steps.create-session.outputs.raw_output }}
+        SESSION_CREATE_OUTPUT: ${{ steps.create-session.outputs.raw_output }}
         WORK_DIR: ${{ steps.preflight.outputs.work-dir }}
       run: |
         set -euo pipefail
-        session_id="$(printf '%s' "$SESSION_ID" | tr -d '\r\n\"')"
+
+        session_id="$({
+          printf '%s' "$SESSION_CREATE_OUTPUT" | python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+resources = payload.get("data", {}).get("resources", [])
+for resource in resources:
+    if resource.get("entity-type") == "SessionResource" and resource.get("action-type") == "CREATED":
+        identifier = resource.get("identifier", "").strip()
+        if identifier:
+            print(identifier)
+            raise SystemExit(0)
+raise SystemExit(1)
+'
+        } || true)"
         if [[ -z "$session_id" || "$session_id" == "null" ]]; then
           echo "::error::Could not determine Bastion session OCID from create-managed-ssh output."
+          printf '%s\n' "$SESSION_CREATE_OUTPUT"
           exit 1
         fi
 
