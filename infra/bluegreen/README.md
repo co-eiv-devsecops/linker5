@@ -1,58 +1,60 @@
-# Blue-Green Deployment
+# Despliegue Blue-Green
 
-Stability-first blue-green releases for Linker on OCI. A new **green** VM is
-created and fully tested before any traffic is moved, and the old **blue** VM is
-only destroyed once green is proven healthy. If anything fails, green is removed
-and blue keeps serving — untouched.
+Lanzamientos Blue-Green con prioridad en la estabilidad para Linker sobre OCI.
+Se crea una VM **green** nueva y se la prueba por completo antes de mover
+tráfico, y la VM **blue** anterior solo se destruye cuando green ya demostró
+estar sana. Si algo falla, green se elimina y blue sigue sirviendo tráfico,
+sin cambios.
 
-## How it works
+## Cómo funciona
 
-Workflow: [`.github/workflows/blue-green-deploy.yml`](../../.github/workflows/blue-green-deploy.yml)
-(run manually from the Actions tab → *Blue-Green Deploy* → *Run workflow*).
+Flujo: [`.github/workflows/blue-green-deploy.yml`](https://5.n-la-c.app/8097a615)
+(se ejecuta manualmente desde la pestaña Actions → *Blue-Green Deploy* → *Run workflow*).
 
-| Job | What it does |
-|-----|--------------|
-| `build` | Builds the runnable jar and uploads it as the `linker-app` artifact. |
-| `launch-green` | Reads the current active instance (`OCI_INSTANCE_OCID` = blue) and launches a **green** VM cloned from its placement (compartment, AD, shape, subnet, image) using `scripts/bluegreen/launch-green.sh` + `infra/bluegreen/cloud-init-green.yaml`. |
-| `deploy-green` | Deploys the jar to green through the OCI Bastion, writes the systemd unit (MySQL + OTel env, identical to prod) and runs **health + functional tests** (create a link, follow its redirect). |
-| `switchover` | On success only: **switches Load Balancer traffic to green** (registers the green backend in the `linker-5` backend set, waits until it is healthy, then removes the blue backend), updates the deploy pointer `OCI_INSTANCE_OCID`, and — only when `retire_blue = true` — terminates blue. |
-| `rollback` | On failure only: **terminates green**; blue stays as the active instance. |
+| Job | Qué hace |
+|-----|----------|
+| `build` | Compila el jar ejecutable y lo sube como artefacto `linker-app`. |
+| `launch-green` | Lee la instancia activa actual (`OCI_INSTANCE_OCID` = blue) y lanza una VM **green** clonada desde su ubicación (compartment, AD, shape, subnet, imagen) usando `scripts/bluegreen/launch-green.sh` + `infra/bluegreen/cloud-init-green.yaml`. |
+| `deploy-green` | Despliega el jar en green a través de OCI Bastion, escribe la unidad de systemd (entorno MySQL + OTel, idéntico a prod) y ejecuta **healthchecks + pruebas funcionales** (crear un link y seguir su redirección). |
+| `switchover` | Solo si todo sale bien: **conmuta el tráfico del Load Balancer a green** (registra el backend green en el backend set `linker-5`, espera a que quede sano y luego elimina el backend blue), actualiza el puntero de despliegue `OCI_INSTANCE_OCID` y, solo cuando `retire_blue = true`, termina blue. |
+| `rollback` | Solo si algo falla: **termina green**; blue sigue como instancia activa. |
 
-Traffic switchover happens at the **Load Balancer** (`OCI_LB_OCID` / backend set
-`OCI_LB_LINKER_BACKEND`, read from [`infra/linker.env`](../linker.env)) via
-`scripts/bluegreen/switch-lb-backend.sh`. Backends are addressed as `<ip>:<port>`.
-The repository variable **`OCI_INSTANCE_OCID`** is the deploy pointer used by the
-CD pipeline (`ci-cd-pipeline.yml`) and is updated to green as well (best-effort,
-requires `GH_PAT`).
+La conmutación de tráfico ocurre en el **Load Balancer** (`OCI_LB_OCID` /
+backend set `OCI_LB_LINKER_BACKEND`, leídos desde [`infra/linker.env`](https://5.n-la-c.app/0103a3ee))
+mediante `scripts/bluegreen/switch-lb-backend.sh`. Los backends se direccionan
+como `<ip>:<port>`. La variable del repositorio **`OCI_INSTANCE_OCID`** es el
+puntero de despliegue usado por el pipeline de CD (`ci-cd-pipeline.yml`) y
+también se actualiza hacia green en modo best-effort (requiere `GH_PAT`).
 
-## Prerequisites
+## Prerrequisitos
 
-- The same OCI secrets/variables used by the CD pipeline: `OCI_CLI_USER`,
+- Los mismos secretos y variables de OCI que usa el pipeline de CD: `OCI_CLI_USER`,
   `OCI_CLI_TENANCY`, `OCI_CLI_FINGERPRINT`, `OCI_CLI_KEY_CONTENT`,
   `OCI_CLI_REGION`, `OCI_BASTION_OCID`, `OCI_INSTANCE_OCID`,
   `DEPLOYMENT_PUBLIC_KEY`, `OTEL_EXPORTER_OTLP_HEADERS`, `MYSQL_*`.
-- The OCI identity behind those credentials must be allowed to **launch and
-  terminate instances** and **manage the Load Balancer backend set** in the
-  target compartment.
-- `infra/linker.env` must contain the LB OCID and backend set name.
-- **`GH_PAT`** secret (PAT with *Variables: read/write*) is **optional**: it is
-  only used to update the `OCI_INSTANCE_OCID` deploy pointer automatically. If it
-  is absent (e.g. the org requires approval for the PAT), traffic still switches
-  at the LB and the job prints the one-line command to update the pointer by hand.
+- La identidad de OCI detrás de esas credenciales debe poder **lanzar y terminar
+  instancias** y **gestionar el backend set del Load Balancer** en el
+  compartment objetivo.
+- `infra/linker.env` debe contener el OCID del LB y el nombre del backend set.
+- El secreto **`GH_PAT`** (PAT con *Variables: read/write*) es **opcional**:
+  solo se usa para actualizar automáticamente el puntero `OCI_INSTANCE_OCID`.
+  Si no está presente (por ejemplo, si la organización requiere aprobación para
+  el PAT), el tráfico igual conmuta en el LB y el job imprime el comando de una
+  línea para actualizar el puntero a mano.
 
-## Run it
+## Cómo ejecutarlo
 
-1. Actions → **Blue-Green Deploy** → **Run workflow** (optionally set a green name).
-2. Watch `launch-green` → `deploy-green`.
-3. If green passes → `switchover` moves the pointer and retires blue.
-4. If green fails → `rollback` deletes green; blue is still live.
+1. Actions → **Blue-Green Deploy** → **Run workflow** (opcionalmente, definir un nombre para green).
+2. Seguir `launch-green` → `deploy-green`.
+3. Si green pasa las pruebas → `switchover` mueve el puntero y retira blue.
+4. Si green falla → `rollback` elimina green; blue sigue en línea.
 
-## Manual switchover (fallback)
+## Conmutación manual (fallback)
 
-If `GH_PAT` is missing, set the pointer by hand after a successful test:
+Si falta `GH_PAT`, definí el puntero a mano después de una prueba exitosa:
 
 ```bash
 gh variable set OCI_INSTANCE_OCID --repo co-eiv-devsecops/linker5 --body <GREEN_OCID>
-# then terminate the old blue instance:
+# después, terminar la instancia blue anterior:
 scripts/bluegreen/terminate-instance.sh <BLUE_OCID>
 ```

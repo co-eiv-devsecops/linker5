@@ -1,37 +1,38 @@
-# Linker — Environment Parity with Terraform (OCI)
+# Linker — Paridad de entorno con Terraform (OCI)
 
-Infrastructure as Code to create, from scratch, a VM on Oracle Cloud (OCI) with
-everything needed to run Linker. The same `terraform apply` produces an identical
-environment every time, so it can be used as **development** or **production**.
+Infraestructura como código para crear, desde cero, una VM en Oracle Cloud
+(OCI) con todo lo necesario para correr Linker. El mismo `terraform apply`
+produce un entorno idéntico cada vez, así que puede usarse tanto para
+**desarrollo** como para **producción**.
 
-What it creates:
+Qué crea:
 
-- A full network: VCN, Internet Gateway, Route Table, Security List, public Subnet.
-- A compute instance (Ubuntu 24.04) with a public IP.
-- Automatic provisioning via **cloud-init**: installs JDK 21 + Maven + git, clones
-  the repo, builds the jar, and registers a `systemd` service (`linker.service`)
-  that starts Linker on boot and restarts it on failure.
+- Una red completa: VCN, Internet Gateway, Route Table, Security List y Subnet pública.
+- Una instancia de cómputo (Ubuntu 24.04) con IP pública.
+- Aprovisionamiento automático vía **cloud-init**: instala JDK 21 + Maven + git,
+  clona el repo, compila el jar y registra un servicio `systemd`
+  (`linker.service`) que inicia Linker al arrancar y lo reinicia si falla.
 
-## Prerequisites
+## Prerrequisitos
 
-- Access to an OCI tenancy and a **compartment** (you need its OCID).
-- An **SSH public key** (found in the Vault secret `sec-linker5-vm-sshpubkey`).
-- Terraform >= 1.3 (already installed in OCI Cloud Shell).
+- Acceso a un tenancy de OCI y a un **compartment** (necesitás su OCID).
+- Una **clave pública SSH** (se encuentra en el secreto de Vault `sec-linker5-vm-sshpubkey`).
+- Terraform >= 1.3 (ya instalado en OCI Cloud Shell).
 
-## Quick start (recommended: OCI Cloud Shell)
+## Inicio rápido (recomendado: OCI Cloud Shell)
 
-Cloud Shell is pre-authenticated, so no API keys are required.
+Cloud Shell ya viene autenticado, así que no hacen falta claves de API.
 
 ```bash
 cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars: set compartment_ocid and ssh_public_key
+# Editar terraform.tfvars: definir compartment_ocid y ssh_public_key
 terraform init
 terraform plan
 terraform apply
 ```
 
-After `apply`, Terraform prints the outputs:
+Después de `apply`, Terraform imprime estos outputs:
 
 ```
 app_url             = "http://<PUBLIC_IP>:8080/"
@@ -39,8 +40,8 @@ instance_public_ip  = "<PUBLIC_IP>"
 ssh_command         = "ssh ubuntu@<PUBLIC_IP>"
 ```
 
-cloud-init takes ~2–4 minutes after boot to finish building. Then open `app_url`
-in a browser, or:
+`cloud-init` tarda unos 2 a 4 minutos después del arranque en terminar de
+construir el entorno. Después abrí `app_url` en un navegador, o probá:
 
 ```bash
 curl -X POST http://<PUBLIC_IP>:8080/link \
@@ -48,35 +49,35 @@ curl -X POST http://<PUBLIC_IP>:8080/link \
   -d '{"url":"https://www.google.com"}'
 ```
 
-## Destroy the environment
+## Destruir el entorno
 
 ```bash
 terraform destroy
 ```
 
-## Running outside Cloud Shell (local machine)
+## Ejecutar fuera de Cloud Shell (máquina local)
 
-Set up `~/.oci/config` with API-key auth, then override the auth method:
+Configurá `~/.oci/config` con autenticación por API key y después sobrescribí el método de autenticación:
 
 ```bash
 terraform apply -var="oci_auth=ApiKey"
 ```
 
-## Useful variables
+## Variables útiles
 
-| Variable            | Default                     | Description                                  |
+| Variable            | Predeterminado              | Descripción                                  |
 |---------------------|-----------------------------|----------------------------------------------|
-| `compartment_ocid`  | —  (required)               | Compartment where resources are created      |
-| `ssh_public_key`    | —  (required)               | SSH public key to access the VM              |
-| `region`            | `sa-bogota-1`               | OCI region                                   |
-| `instance_shape`    | `VM.Standard.E2.1.Micro`    | VM shape (Always Free, x86)                  |
-| `repo_url`          | Linker GitHub repo (HTTPS)  | Repository cloned and built on the VM        |
-| `github_token`      | `""`                        | Read-only PAT to clone a PRIVATE repo (empty = public) |
-| `repo_branch`       | `main`                      | Branch to deploy                             |
-| `app_port`          | `8080`                      | Port Linker listens on                       |
-| `ssh_allowed_cidr`  | `""` (required if `create_network = true`) | CIDR allowed to SSH into the VM (port 22); must not be `0.0.0.0/0` |
+| `compartment_ocid`  | —  (requerido)              | Compartment donde se crean los recursos      |
+| `ssh_public_key`    | —  (requerido)              | Clave pública SSH para acceder a la VM       |
+| `region`            | `sa-bogota-1`               | Región de OCI                                |
+| `instance_shape`    | `VM.Standard.E2.1.Micro`    | Shape de la VM (Always Free, x86)            |
+| `repo_url`          | Repo de Linker en GitHub (HTTPS) | Repositorio clonado y compilado en la VM |
+| `github_token`      | `""`                        | PAT de solo lectura para clonar un repo PRIVADO (vacío = público) |
+| `repo_branch`       | `main`                      | Rama a desplegar                             |
+| `app_port`          | `8080`                      | Puerto en el que escucha Linker              |
+| `ssh_allowed_cidr`  | `""` (requerido si `create_network = true`) | CIDR habilitado para SSH hacia la VM (puerto 22); no debe ser `0.0.0.0/0` |
 
-For a larger ARM Always-Free shape, set in `terraform.tfvars`:
+Para usar un shape ARM Always-Free más grande, definí esto en `terraform.tfvars`:
 
 ```hcl
 instance_shape      = "VM.Standard.A1.Flex"
@@ -84,16 +85,17 @@ instance_ocpus      = 1
 instance_memory_gbs = 6
 ```
 
-## Required IAM permissions
+## Permisos IAM requeridos
 
-`terraform apply` creates networking and compute resources, which requires the
-identity running Terraform to have manage permissions in the target compartment.
-In a locked-down course/landing-zone tenancy these are usually NOT granted to
-students (read-only), so `apply` fails with `404-NotAuthorizedOrNotFound` on
-`CreateVcn` / `LaunchInstance` even though `plan` succeeds (plan is read-only).
+`terraform apply` crea recursos de red y de cómputo, lo que requiere que la
+identidad que ejecuta Terraform tenga permisos de manage en el compartment
+objetivo. En un tenancy del curso o landing zone con permisos restringidos,
+esto normalmente NO se les da a estudiantes (solo lectura), así que `apply`
+falla con `404-NotAuthorizedOrNotFound` en `CreateVcn` / `LaunchInstance`
+aunque `plan` funcione bien (porque `plan` es de solo lectura).
 
-To actually run `apply`, an administrator must grant the student group a policy
-like this (full from-scratch mode, single compartment):
+Para poder ejecutar `apply` de verdad, un administrador debe otorgarle al grupo
+de estudiantes una política como esta (modo completo desde cero, un solo compartment):
 
 ```
 Allow group <student-group> to manage virtual-network-family in compartment <target>
@@ -102,25 +104,26 @@ Allow group <student-group> to manage volume-family          in compartment <tar
 Allow group <student-group> to read   instance-images        in compartment <target>
 ```
 
-If reusing an existing subnet that lives in a separate network compartment
-(create_network = false), also add:
+Si se reutiliza una subnet existente que vive en un compartment de red separado
+(`create_network = false`), también hay que agregar:
 
 ```
 Allow group <student-group> to use subnets in compartment <network-compartment>
 Allow group <student-group> to use vnics   in compartment <network-compartment>
 ```
 
-Verify your own permission quickly with the CLI (creates + deletes a throwaway VCN):
+Verificá rápido tus permisos con la CLI (crea y elimina una VCN descartable):
 
 ```bash
 oci network vcn create --compartment-id <target> --cidr-blocks '["10.9.0.0/16"]' --display-name perm-test
-# if it succeeds you have create rights; delete it with: oci network vcn delete --vcn-id <id> --force
+# si funciona, tenés permisos de creación; eliminála con: oci network vcn delete --vcn-id <id> --force
 ```
 
-## Notes
+## Notas
 
-- For a **private** repo, set `github_token` to a read-only, fine-grained GitHub
-  PAT (scope: Contents → Read-only). cloud-init uses it only to clone. It is stored
-  in the VM `user_data`, so prefer a short-lived token and revoke it after deploy.
-  For a public repo, leave `github_token = ""`.
-- `terraform.tfvars` and state files are git-ignored (they may contain OCIDs/keys).
+- Para un repo **privado**, definí `github_token` como un GitHub PAT granular y
+  de solo lectura (scope: Contents → Read-only). `cloud-init` lo usa solamente
+  para clonar. Queda almacenado en el `user_data` de la VM, así que conviene
+  usar un token de vida corta y revocarlo después del despliegue. Para un repo
+  público, dejá `github_token = ""`.
+- `terraform.tfvars` y los state files están ignorados por git (pueden contener OCIDs o claves).

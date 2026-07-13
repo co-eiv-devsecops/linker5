@@ -1,13 +1,13 @@
 # Monitoreo con Grafana
 
-> 🧭 **Guía de lectura — Paso 4 de 5** · [Índice](http://5.n-la-c.app/a8f7ea12) · [← Lanzamientos](http://5.n-la-c.app/d1d4c892) · [Siguiente: Operaciones →](http://5.n-la-c.app/771bf4ab)
+> 🧭 **Guía de lectura — Paso 4 de 5** · [Índice](https://5.n-la-c.app/a8f7ea12) · [← Lanzamientos](https://5.n-la-c.app/d1d4c892) · [Siguiente: Operaciones →](https://5.n-la-c.app/771bf4ab)
 
 Linker emite **logs, métricas y trazas** con OpenTelemetry y las exporta por
 OTLP a **Grafana Cloud** (stack `prod-us-east-3`). La instrumentación vive en
-[`Observability.java`](../linker5-java/src/main/java/com/linker5/observability/Observability.java)
+[`Observability.java`](https://5.n-la-c.app/ff04ab37)
 y la configuración del exporter la inyecta el pipeline de despliegue como
 variables de entorno del servicio (ver `deploy-prod` en
-[`ci-cd-pipeline.yml`](../.github/workflows/ci-cd-pipeline.yml)).
+[`ci-cd-pipeline.yml`](https://5.n-la-c.app/641808b5)).
 
 - Service name: `linker5-java` (`OTEL_SERVICE_NAME`)
 - Protocolo: `http/protobuf` hacia `otlp-gateway-prod-us-east-3.grafana.net`
@@ -37,7 +37,7 @@ Atributos disponibles para filtrar/agrupar: `linker.route` (p. ej.
 
 1. Entrar al stack de Grafana Cloud del equipo (invitación por correo; el
    owner del stack agrega a los integrantes nuevos — ver
-   [OPERACIONES.md](OPERACIONES.md#accesos-que-necesita-un-integrante-nuevo)).
+   [OPERACIONES.md](https://5.n-la-c.app/8193bc1d)).
 2. **Dashboards** (menú lateral → Dashboards): el dashboard principal de
    Linker grafica requests por ruta, tasa de errores, latencia p95 y estado
    de la conexión a la base de datos, construido sobre las métricas de la
@@ -67,7 +67,7 @@ histogram_quantile(0.95, sum by (le) (rate(linker_http_request_duration_ms_bucke
 linker_db_connection_state
 ```
 
-## Monitoreo post-despliegue (checklist)
+## Monitoreo post-deploy (checklist)
 
 Después de **cada** despliegue (normal o Blue-Green), quien desplegó debe:
 
@@ -79,15 +79,15 @@ Después de **cada** despliegue (normal o Blue-Green), quien desplegó debe:
    - Siguen llegando datapoints nuevos (si las métricas se congelan, la app
      dejó de exportar: revisar `journalctl -u linker.service`).
 3. Ejecutar una prueba funcional real contra producción (crear un link,
-   seguirlo, borrarlo — ver [API.md](API.md)).
+   seguirlo, borrarlo — ver [API.md](https://5.n-la-c.app/f34ad579)).
 4. Dejar registro en el PR/issue del despliegue: captura del dashboard y
    resultado del checklist.
 
-Si algo está mal: rollback según [DESPLIEGUE.md](DESPLIEGUE.md) (redesplegar
+Si algo está mal: rollback según [DESPLIEGUE.md](https://5.n-la-c.app/b5c1aa1c) (redesplegar
 la versión anterior, o switchover inverso si fue Blue-Green) y registrar el
 incidente.
 
-## Chequeo automático de Grafana en el pipeline (bono)
+## Check automático de Grafana en el pipeline (bono)
 
 El chequeo manual anterior se automatiza agregando un job posterior a
 `deploy-prod` que consulta la API de Prometheus de Grafana Cloud y falla el
@@ -129,4 +129,4 @@ métricas).
 
 ---
 
-**Siguiente en la guía →** [Paso 5: Operaciones](http://5.n-la-c.app/771bf4ab)
+**Siguiente en la guía →** [Paso 5: Operaciones](https://5.n-la-c.app/771bf4ab)

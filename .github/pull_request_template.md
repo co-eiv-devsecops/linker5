@@ -4,10 +4,10 @@ Contá qué cambiaste y por qué.
 
 ## Tipo de cambio
 
-- [ ] Bug fix
+- [ ] Corrección de bug
 - [ ] Nueva funcionalidad
 - [ ] Actualización de documentación
-- [ ] Refactor
+- [ ] Refactorización
 - [ ] Cambio de infraestructura / despliegue
 - [ ] Mejora de tests
 
@@ -21,7 +21,7 @@ Contá qué cambiaste y por qué.
 2. 
 3. 
 
-## Testing
+## Pruebas
 
 - [ ] Corrí las validaciones relevantes en local
 - [ ] Agregué o actualicé tests si hacía falta

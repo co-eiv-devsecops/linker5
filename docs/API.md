@@ -1,6 +1,6 @@
 # API de Linker
 
-> 🧭 **Guía de lectura — Paso 1 de 5** · [Índice](http://5.n-la-c.app/a8f7ea12) · [Siguiente: Despliegue →](http://5.n-la-c.app/7394b680)
+> 🧭 **Guía de lectura — Paso 1 de 5** · [Índice](https://5.n-la-c.app/a8f7ea12) · [Siguiente: Despliegue →](https://5.n-la-c.app/7394b680)
 
 Linker expone una API HTTP sencilla en el puerto `8080` (configurable con
 `PORT` o `-Dlinker.port`). Todos los ejemplos usan `$LINKER_HOST` como la URL
@@ -11,7 +11,7 @@ base de la instancia: `http://localhost:8080` en local, o en producción
 La **misma API** se sirve en los dos objetivos de producción: la VM de OCI y
 la Function App de Azure (`https://<function-app>.azurewebsites.net`), porque
 ambos comparten el mismo runtime (ver
-[LANZAMIENTOS.md](LANZAMIENTOS.md#abstracción-del-core-serverless-en-azure-functions-bono)).
+[LANZAMIENTOS.md](https://5.n-la-c.app/f731a37a)).
 
 ## Resumen de endpoints
 
@@ -52,7 +52,7 @@ curl -i "$LINKER_HOST/a1b2c3"
 ```
 
 `404 Not Found` si el id no existe. La redirección está controlada por el
-feature flag `redirects-enabled` (ver [LANZAMIENTOS.md](LANZAMIENTOS.md)).
+feature flag `redirects-enabled` (ver [LANZAMIENTOS.md](https://5.n-la-c.app/92e7af2f)).
 
 ## HEAD /\<id\> — metadata del short link
 
@@ -87,7 +87,7 @@ curl -sS "$LINKER_HOST/healthz"
 ```
 
 Devuelve `500` con `{"status":"fail"}` si la base de datos no responde. Este
-endpoint es el que usan el pipeline de despliegue y el procedimiento
+endpoint es el que usan el pipeline de deploy y el procedimiento
 Blue-Green para validar una instancia antes de enviarle tráfico.
 
 ## Errores
@@ -98,4 +98,4 @@ Todos los errores de la API se serializan como JSON
 
 ---
 
-**Siguiente en la guía →** [Paso 2: Despliegue](http://5.n-la-c.app/7394b680)
+**Siguiente en la guía →** [Paso 2: Despliegue](https://5.n-la-c.app/7394b680)

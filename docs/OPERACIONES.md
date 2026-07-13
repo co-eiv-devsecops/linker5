@@ -1,6 +1,6 @@
 # Operaciones de Linker (runbook)
 
-> 🧭 **Guía de lectura — Paso 5 de 5** · [Índice](http://5.n-la-c.app/a8f7ea12) · [← Monitoreo](http://5.n-la-c.app/61d63272)
+> 🧭 **Guía de lectura — Paso 5 de 5** · [Índice](https://5.n-la-c.app/a8f7ea12) · [← Monitoreo](https://5.n-la-c.app/61d63272)
 
 Guía para operar Linker en el día a día y para que un integrante nuevo pueda
 contribuir desde el primer día.
@@ -20,7 +20,7 @@ contribuir desde el primer día.
 
 1. Clonar el repo y levantar el entorno de desarrollo. La vía sin fricción es
    **GitHub Codespaces** (Code → Codespaces → Create): el
-   [devcontainer](../.devcontainer/README.md) trae JDK 21 + Maven listos.
+   [devcontainer](https://5.n-la-c.app/cf744019) trae JDK 21 + Maven listos.
    En local solo se necesita JDK 21 y Maven.
 2. Compilar, probar y correr:
 
@@ -31,14 +31,14 @@ contribuir desde el primer día.
    java -jar target/*-jar-with-dependencies.jar   # http://localhost:8080/
    ```
 
-3. Probar la API con los ejemplos de [API.md](API.md).
-4. Leer [DESPLIEGUE.md](DESPLIEGUE.md), [LANZAMIENTOS.md](LANZAMIENTOS.md) y
-   [MONITOREO.md](MONITOREO.md) — con eso se entiende el ciclo completo
+3. Probar la API con los ejemplos de [API.md](https://5.n-la-c.app/f34ad579).
+4. Leer [DESPLIEGUE.md](https://5.n-la-c.app/b5c1aa1c), [LANZAMIENTOS.md](https://5.n-la-c.app/92e7af2f) y
+   [MONITOREO.md](https://5.n-la-c.app/a3f6b902) — con eso se entiende el ciclo completo
    código → pipeline → producción → monitoreo.
 
 ### Flujo de trabajo
 
-Detallado en [CONTRIBUTING.md](../CONTRIBUTING.md). Resumen:
+Detallado en [CONTRIBUTING.md](https://5.n-la-c.app/ed449b8b). Resumen:
 
 1. Rama nueva desde `main` (`feature/...`, `fix/...`).
 2. Cambios chicos y enfocados; agregar/ajustar tests.
@@ -47,7 +47,7 @@ Detallado en [CONTRIBUTING.md](../CONTRIBUTING.md). Resumen:
    unitarios y el entorno efímero de integración automáticamente.
 5. Revisión de otro integrante y merge. El merge a `main` **despliega a
    producción** automáticamente — después del merge, ejecutar el checklist
-   post-despliegue de [MONITOREO.md](MONITOREO.md#monitoreo-post-despliegue-checklist).
+   post-despliegue de [MONITOREO.md](https://5.n-la-c.app/f26d466d).
 
 ## Participación del equipo
 
@@ -68,13 +68,13 @@ El trabajo se reparte de forma homogénea entre los cuatro integrantes:
 
 ## Cómo se corren los scripts
 
-Todos los scripts viven en [`scripts/`](../scripts/) y son bash. En Windows se
+Todos los scripts viven en [`scripts/`](https://5.n-la-c.app/dcb8e4ee) y son bash. En Windows se
 corren desde Git Bash o WSL.
 
 ### `scripts/deploy.sh` — desplegar en una VM
 
 Corre **en la VM** (o vía SSH). Actualiza el repo, compila el jar, reinicia el
-servicio systemd y hace healthcheck con reintentos:
+servicio systemd y hace healthchecks con reintentos:
 
 ```bash
 # En la VM, con el repo clonado en ~/linker5:
@@ -119,8 +119,8 @@ scripts/bluegreen/terminate-instance.sh <INSTANCE_OCID>
 ```
 
 Requieren OCI CLI configurada. El detalle del flujo completo está en
-[DESPLIEGUE.md](DESPLIEGUE.md#despliegue-blue-green--) y
-[`infra/bluegreen/README.md`](../infra/bluegreen/README.md).
+[DESPLIEGUE.md](https://5.n-la-c.app/c9a4a25c) y
+[`infra/bluegreen/README.md`](https://5.n-la-c.app/adf46677).
 
 ### `scripts/provision-azure.sh` — bootstrap del objetivo serverless
 
@@ -139,11 +139,11 @@ los despliegues.
 ### `scripts/shorten-url.sh` — crear un short link
 
 Acorta una URL usando la instancia de Linker (ver
-[Política de links cortos](#política-de-links-cortos)):
+[Política de links cortos](https://5.n-la-c.app/40f371af)):
 
 ```bash
 LINKER_HOST=https://5.n-la-c.app ./scripts/shorten-url.sh https://www.google.com
-# -> http://5.n-la-c.app/a1b2c3
+# -> https://5.n-la-c.app/a1b2c3
 ```
 
 ### Terraform (infraestructura)
@@ -156,7 +156,7 @@ terraform destroy                              # retirar el entorno
 ```
 
 Detalles, variables y permisos IAM en
-[`infra/terraform/README.md`](../infra/terraform/README.md).
+[`infra/terraform/README.md`](https://5.n-la-c.app/6554ff68).
 
 ## 0 operaciones manuales en la consola de OCI
 
@@ -168,7 +168,7 @@ OCI**. Toda la operación pasa por herramientas versionadas:
 | Crear/destruir VMs y red | Terraform (`infra/terraform/`) |
 | Desplegar la app (OCI) | GitHub Actions (`deploy-prod`, vía OCI Bastion) |
 | Desplegar la app (Azure Functions) | GitHub Actions (`deploy-azure` con login OIDC) |
-| Blue-Green: crear instancia, switchover en el LB, retirar VM | Workflow *Blue-Green Deploy* + `scripts/bluegreen/*.sh` (OCI CLI) |
+| Blue-Green: crear instancia, switchover en el Load Balancer, retirar VM | Workflow *Blue-Green Deploy* + `scripts/bluegreen/*.sh` (OCI CLI) |
 | Aprovisionar el objetivo Azure | `scripts/provision-azure.sh` (az CLI), nada en el portal |
 | Acceso a la VM | SSH por Bastion (la acción `oci-bastion-deploy` lo gestiona) |
 | Verificaciones puntuales | OCI CLI / az CLI (scriptable), nunca clicks en la consola |
@@ -181,16 +181,17 @@ que Terraform desconozca.
 
 ## Cómo navegar Grafana y sus dashboards
 
-Guía completa en [MONITOREO.md](MONITOREO.md#cómo-navegar-grafana): dónde está
+Guía completa en [MONITOREO.md](https://5.n-la-c.app/ba5dff2f): dónde está
 el dashboard de Linker, qué paneles tiene, cómo usar Explore
 (Prometheus/Loki/Tempo) y las consultas PromQL de referencia.
 
 ## Política de links cortos
 
-**Todo link `http(s)` que aparezca en la documentación del repositorio debe
-ser un link acortado por nuestro propio Linker** (dogfooding). La excepción
-son los valores de configuración (endpoints OTLP, URLs de ejemplo en código y
-docs de API) y los links relativos dentro del repo.
+**Todo link clickeable de Markdown que aparezca en la documentación del repositorio debe usar un short link generado por nuestro propio Linker** (dogfooding).
+
+Si el destino original vive en este repo, no se deja como link relativo: primero se canoniza a GitHub en la rama `main` (`blob` para archivos, `tree` para directorios, preservando `#anchor`) y recién después se acorta.
+
+Se dejan sin acortar solo los valores de configuración, URLs de ejemplo dentro de bloques de código o texto inline, y los sources de imágenes/badges.
 
 Para acortar un link antes de usarlo en un documento:
 
@@ -198,9 +199,8 @@ Para acortar un link antes de usarlo en un documento:
 LINKER_HOST=https://5.n-la-c.app ./scripts/shorten-url.sh <url-larga>
 ```
 
-y usar en el markdown el `shortUrl` devuelto. En la revisión de PRs se
-verifica que los links externos nuevos cumplan la política.
+y usar en el markdown el `shortUrl` devuelto, normalizado a `https://5.n-la-c.app/<id>`. En la revisión de PRs se verifica que los links nuevos cumplan la política.
 
 ---
 
-**Fin de la guía** · [Volver al índice](http://5.n-la-c.app/a8f7ea12)
+**Fin de la guía** · [Volver al índice](https://5.n-la-c.app/a8f7ea12)
