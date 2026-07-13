@@ -190,6 +190,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
+      - name: Package OCI VM artifact
+        run: mvn -B -f linker5-java/pom.xml package -DskipTests
+
       - name: Upload executable jar
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v7
