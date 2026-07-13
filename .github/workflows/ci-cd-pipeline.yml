@@ -191,7 +191,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Package OCI VM artifact
-        run: mvn -B -f linker5-java/pom.xml package -DskipTests
+        uses: ./.github/actions/package-oci
 
       - name: Upload executable jar
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -397,45 +397,20 @@ jobs:
 
     steps:
       - name: Verify OCI VM routes
-        uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+        uses: ./.github/actions/verify-oci
         with:
-          ssh-public-key: ${{ env.DEPLOYMENT_PUBLIC_KEY }}
-          bastion-id: ${{ vars.OCI_BASTION_OCID }}
-          instance-id: ${{ env.OCI_INSTANCE_OCID }}
+          deployment-private-key: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
+          deployment-public-key: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
+          oci-cli-user: ${{ secrets.OCI_CLI_USER }}
+          oci-cli-tenancy: ${{ secrets.OCI_CLI_TENANCY }}
+          oci-cli-fingerprint: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          oci-cli-key-content: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          oci-cli-region: ${{ vars.OCI_CLI_REGION }}
+          oci-bastion-ocid: ${{ vars.OCI_BASTION_OCID }}
+          oci-instance-ocid: ${{ vars.OCI_INSTANCE_OCID }}
           artifact-name: linker-oci-vm-artifact
           target-path: /tmp/deploy/linker/${{ github.sha }}
           target-os-username: ubuntu
-          oci-cli-cache-version: v1
-          script: |
-            set -euo pipefail
-
-            echo "Waiting for the app to become healthy..."
-            for i in $(seq 1 20); do
-              if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
-                echo "OCI app is healthy"
-                break
-              fi
-              sleep 3
-            done
-
-            if ! curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
-              echo "OCI healthcheck failed"
-              sudo systemctl status linker.service --no-pager || true
-              sudo journalctl -u linker.service -n 60 --no-pager || true
-              exit 1
-            fi
-
-            CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link -H 'Content-Type: application/json' -d '{"url":"https://www.google.com"}')"
-            SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-            LOCATION="$(curl -s -o /dev/null -D - "http://127.0.0.1:8080/${SHORT_ID}" | grep -i '^location:' | tr -d '\r')"
-            HEAD_STATUS="$(curl -s -o /dev/null -I -w '%{http_code}' "http://127.0.0.1:8080/${SHORT_ID}")"
-            DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "http://127.0.0.1:8080/${SHORT_ID}")"
-            STATUS="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)"
-
-            test "$LOCATION" = 'Location: https://www.google.com'
-            test "$HEAD_STATUS" = '200'
-            test "$DELETE_STATUS" = '204'
-            test "$STATUS" = '404'
 
   deploy-azure:
     name: Deploy to Azure Functions
@@ -513,48 +488,10 @@ jobs:
       AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
 
     steps:
-      - name: Wait for Azure Function app health
-        run: |
-          set -euo pipefail
-          BASE_URL="https://${AZURE_FUNCTION_APP_NAME}.azurewebsites.net"
-          for i in $(seq 1 30); do
-            if curl -fsS "${BASE_URL}/healthz" >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 10
-          done
-          exit 1
-
       - name: Verify Azure Function routes
-        run: |
-          set -euo pipefail
-          BASE_URL="https://${AZURE_FUNCTION_APP_NAME}.azurewebsites.net"
-
-          ROOT_CONTENT_TYPE="$(curl -s -o /tmp/linker-root.html -D - "${BASE_URL}/" | grep -i '^content-type:' | tr -d '\r')"
-          echo "$ROOT_CONTENT_TYPE" | grep -qi 'text/html'
-          grep -q '<title>Linker</title>' /tmp/linker-root.html
-
-          CSS_CONTENT_TYPE="$(curl -s -o /tmp/linker-style.css -D - "${BASE_URL}/css/style.css" | grep -i '^content-type:' | tr -d '\r')"
-          echo "$CSS_CONTENT_TYPE" | grep -qi 'text/css'
-
-          JS_CONTENT_TYPE="$(curl -s -o /tmp/linker-app.js -D - "${BASE_URL}/js/app.js" | grep -i '^content-type:' | tr -d '\r')"
-          echo "$JS_CONTENT_TYPE" | grep -qi 'application/javascript'
-
-          CREATE_RESPONSE="$(curl -fsS -X POST "${BASE_URL}/link" -H "Content-Type: application/json" -d '{"url":"https://www.google.com"}')"
-          SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
-          [ -n "$SHORT_ID" ] && [ "$SHORT_ID" != "null" ]
-
-          LOCATION="$(curl -s -o /dev/null -D - "${BASE_URL}/${SHORT_ID}" | grep -i '^location:' | tr -d '\r')"
-          echo "$LOCATION" | grep -q "https://www.google.com"
-
-          HEAD_STATUS="$(curl -s -o /dev/null -I -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
-          [ "$HEAD_STATUS" = "200" ]
-
-          DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
-          [ "$DELETE_STATUS" = "204" ]
-
-          STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/does-not-exist")"
-          [ "$STATUS" = "404" ]
+        uses: ./.github/actions/verify-azure-routes
+        with:
+          base-url: https://${{ vars.AZURE_FUNCTION_APP_NAME }}.azurewebsites.net
 
   verify-observability-oci:
     name: Verify OCI VM observability configuration and traffic
@@ -575,36 +512,20 @@ jobs:
 
     steps:
       - name: Verify OCI VM OTEL settings and emit synthetic traffic
-        uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+        uses: ./.github/actions/verify-oci-observability
         with:
-          ssh-public-key: ${{ env.DEPLOYMENT_PUBLIC_KEY }}
-          bastion-id: ${{ vars.OCI_BASTION_OCID }}
-          instance-id: ${{ env.OCI_INSTANCE_OCID }}
+          deployment-private-key: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
+          deployment-public-key: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
+          oci-cli-user: ${{ secrets.OCI_CLI_USER }}
+          oci-cli-tenancy: ${{ secrets.OCI_CLI_TENANCY }}
+          oci-cli-fingerprint: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          oci-cli-key-content: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          oci-cli-region: ${{ vars.OCI_CLI_REGION }}
+          oci-bastion-ocid: ${{ vars.OCI_BASTION_OCID }}
+          oci-instance-ocid: ${{ vars.OCI_INSTANCE_OCID }}
           artifact-name: linker-oci-vm-artifact
           target-path: /tmp/deploy/linker/${{ github.sha }}
           target-os-username: ubuntu
-          oci-cli-cache-version: v1
-          script: |
-            set -euo pipefail
-
-            SERVICE_ENV="$(sudo systemctl show linker.service --property=Environment --value)"
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_SERVICE_NAME=linker5-java'
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_RESOURCE_ATTRIBUTES=deployment.environment=oci,cloud.provider=oracle'
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces'
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics'
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs'
-            printf '%s\n' "$SERVICE_ENV" | grep -q 'LINKER_OTEL_LOG_EXPORT=true'
-
-            for i in $(seq 1 5); do
-              curl -fsS http://127.0.0.1:8080/healthz >/dev/null
-              CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link -H 'Content-Type: application/json' -d '{"url":"https://www.google.com"}')"
-              SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-              curl -fsSI "http://127.0.0.1:8080/${SHORT_ID}" >/dev/null
-              curl -fsS -X DELETE "http://127.0.0.1:8080/${SHORT_ID}" >/dev/null
-              curl -fsS http://127.0.0.1:8080/does-not-exist >/dev/null 2>&1 || true
-            done
-
-            echo 'OCI synthetic observability traffic generated successfully.'
 
   verify-observability-azure:
     name: Verify Azure Functions observability configuration and traffic
@@ -623,39 +544,11 @@ jobs:
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
 
     steps:
-      - name: Azure login
-        uses: azure/login@v2
+      - name: Verify Azure Function OTEL settings and emit synthetic traffic
+        uses: ./.github/actions/verify-azure-observability
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Verify Azure Function OTEL settings
-        run: |
-          set -euo pipefail
-          SETTINGS_JSON="$(az functionapp config appsettings list --name "${AZURE_FUNCTION_APP_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}" --output json)"
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_SERVICE_NAME" and .value == "linker5-java")' >/dev/null
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_RESOURCE_ATTRIBUTES" and .value == "deployment.environment=azure,cloud.provider=azure")' >/dev/null
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces")' >/dev/null
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics")' >/dev/null
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs")' >/dev/null
-          printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "LINKER_OTEL_LOG_EXPORT" and .value == "true")' >/dev/null
-
-      - name: Emit Azure synthetic observability traffic
-        run: |
-          set -euo pipefail
-          BASE_URL="https://${AZURE_FUNCTION_APP_NAME}.azurewebsites.net"
-
-          for i in $(seq 1 5); do
-            curl -fsS "${BASE_URL}/healthz" >/dev/null
-            CREATE_RESPONSE="$(curl -fsS -X POST "${BASE_URL}/link" -H "Content-Type: application/json" -d '{"url":"https://www.google.com"}')"
-            SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
-            [ -n "$SHORT_ID" ] && [ "$SHORT_ID" != "null" ]
-            curl -fsSI "${BASE_URL}/${SHORT_ID}" >/dev/null
-            DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
-            [ "$DELETE_STATUS" = "204" ]
-            STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/does-not-exist")"
-            [ "$STATUS" = "404" ]
-          done
-
-          echo 'Azure synthetic observability traffic generated successfully.'
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}

@@ -1,0 +1,9 @@
+name: Package OCI VM artifact
+description: Build the OCI deployable jar locally
+
+runs:
+  using: composite
+  steps:
+    - name: Build OCI deployable jar
+      shell: bash
+      run: mvn -B -f linker5-java/pom.xml package -DskipTests
