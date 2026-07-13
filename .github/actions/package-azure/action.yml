@@ -1,0 +1,34 @@
+name: Package Azure Functions artifact
+description: Build and validate the Azure Functions package output
+
+inputs:
+  azure-function-app-name:
+    required: true
+  azure-resource-group:
+    required: true
+  azure-region:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Package Azure Functions artifact
+      shell: bash
+      run: >-
+        mvn -B -f linker5-java/pom.xml -DskipTests package
+        -Dazure.functions.appName="${{ inputs.azure-function-app-name }}"
+        -Dazure.functions.resourceGroup="${{ inputs.azure-resource-group }}"
+        -Dazure.functions.region="${{ inputs.azure-region }}"
+        azure-functions:package
+
+    - name: Verify Azure package output exists
+      shell: bash
+      run: |
+        set -euo pipefail
+        OUTPUT_DIR="linker5-java/target/azure-functions/${{ inputs.azure-function-app-name }}"
+        if [ ! -d "$OUTPUT_DIR" ]; then
+          echo "Azure Functions package directory was not generated: $OUTPUT_DIR"
+          find linker5-java/target -maxdepth 3 -type d | sort || true
+          exit 1
+        fi
+        test -f "$OUTPUT_DIR/host.json"

@@ -1,0 +1,155 @@
+name: Deploy to OCI VM
+description: Deploy the packaged OCI artifact to the VM through Bastion
+
+inputs:
+  deployment-private-key:
+    required: true
+  deployment-public-key:
+    required: true
+  oci-cli-user:
+    required: true
+  oci-cli-tenancy:
+    required: true
+  oci-cli-fingerprint:
+    required: true
+  oci-cli-key-content:
+    required: true
+  oci-cli-region:
+    required: true
+  oci-bastion-ocid:
+    required: true
+  oci-instance-ocid:
+    required: true
+  otel-service-name:
+    required: true
+  otel-resource-attributes:
+    required: true
+  otel-exporter-otlp-protocol:
+    required: true
+  otel-exporter-otlp-traces-endpoint:
+    required: true
+  otel-exporter-otlp-metrics-endpoint:
+    required: true
+  otel-exporter-otlp-logs-endpoint:
+    required: true
+  otel-exporter-otlp-headers:
+    required: true
+  mysql-host:
+    required: true
+  mysql-database:
+    required: true
+  mysql-user:
+    required: true
+  mysql-pwd:
+    required: true
+  artifact-name:
+    required: true
+  target-path:
+    required: true
+  target-os-username:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy to OCI VM
+      uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+      env:
+        DEPLOYMENT_PRIVATE_KEY: ${{ inputs.deployment-private-key }}
+        DEPLOYMENT_PUBLIC_KEY: ${{ inputs.deployment-public-key }}
+        OCI_CLI_USER: ${{ inputs.oci-cli-user }}
+        OCI_CLI_TENANCY: ${{ inputs.oci-cli-tenancy }}
+        OCI_CLI_FINGERPRINT: ${{ inputs.oci-cli-fingerprint }}
+        OCI_CLI_KEY_CONTENT: ${{ inputs.oci-cli-key-content }}
+        OCI_CLI_REGION: ${{ inputs.oci-cli-region }}
+        OCI_BASTION_OCID: ${{ inputs.oci-bastion-ocid }}
+        OCI_INSTANCE_OCID: ${{ inputs.oci-instance-ocid }}
+      with:
+        instance-id: ${{ inputs.oci-instance-ocid }}
+        artifact-name: ${{ inputs.artifact-name }}
+        target-path: ${{ inputs.target-path }}
+        target-os-username: ${{ inputs.target-os-username }}
+        oci-cli-cache-version: v1
+        script: |
+          set -euo pipefail
+
+          DEPLOY_DIR="${{ inputs.target-path }}"
+          JAR="$(find "$DEPLOY_DIR" -name '*-jar-with-dependencies.jar' | head -n1)"
+
+          if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
+            echo "No deployable jar found under $DEPLOY_DIR"
+            ls -la "$DEPLOY_DIR" || true
+            exit 1
+          fi
+          echo "Deploying artifact: $JAR"
+
+          OTEL_EXPORTER_OTLP_HEADERS_VALUE=$(cat <<'EOF'
+          ${{ inputs.otel-exporter-otlp-headers }}
+          EOF
+          )
+          MYSQL_HOST_VALUE=$(cat <<'EOF'
+          ${{ inputs.mysql-host }}
+          EOF
+          )
+          MYSQL_DATABASE_VALUE=$(cat <<'EOF'
+          ${{ inputs.mysql-database }}
+          EOF
+          )
+          MYSQL_USER_VALUE=$(cat <<'EOF'
+          ${{ inputs.mysql-user }}
+          EOF
+          )
+          MYSQL_PWD_VALUE=$(cat <<'EOF'
+          ${{ inputs.mysql-pwd }}
+          EOF
+          )
+
+          escape_systemd_value() {
+            printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+          }
+
+          OTEL_EXPORTER_OTLP_HEADERS_ESCAPED="$(escape_systemd_value "$OTEL_EXPORTER_OTLP_HEADERS_VALUE")"
+          MYSQL_HOST_ESCAPED="$(escape_systemd_value "$MYSQL_HOST_VALUE")"
+          MYSQL_DATABASE_ESCAPED="$(escape_systemd_value "$MYSQL_DATABASE_VALUE")"
+          MYSQL_USER_ESCAPED="$(escape_systemd_value "$MYSQL_USER_VALUE")"
+          MYSQL_PWD_ESCAPED="$(escape_systemd_value "$MYSQL_PWD_VALUE")"
+
+          echo "Installing/updating linker.service unit..."
+          sudo tee /etc/systemd/system/linker.service > /dev/null <<UNIT
+          [Unit]
+          Description=Linker URL Shortener
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu
+          Environment=PORT=8080
+          Environment=LINKER_LOG_LEVEL=INFO
+          Environment=LINKER_OTEL_LOG_EXPORT=true
+          Environment=FEATURE_REDIRECTS_ENABLED=true
+          Environment=OTEL_SERVICE_NAME=${{ inputs.otel-service-name }}
+          Environment=OTEL_RESOURCE_ATTRIBUTES=${{ inputs.otel-resource-attributes }}
+          Environment=OTEL_EXPORTER_OTLP_PROTOCOL=${{ inputs.otel-exporter-otlp-protocol }}
+          Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${{ inputs.otel-exporter-otlp-traces-endpoint }}
+          Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${{ inputs.otel-exporter-otlp-metrics-endpoint }}
+          Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${{ inputs.otel-exporter-otlp-logs-endpoint }}
+          Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS_ESCAPED}"
+          Environment="MYSQL_HOST=${MYSQL_HOST_ESCAPED}"
+          Environment="MYSQL_DATABASE=${MYSQL_DATABASE_ESCAPED}"
+          Environment="MYSQL_USER=${MYSQL_USER_ESCAPED}"
+          Environment="MYSQL_PWD=${MYSQL_PWD_ESCAPED}"
+          ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          sudo systemctl daemon-reload
+          sudo systemctl enable linker.service
+
+          sudo systemctl stop linker.service || true
+          sudo install -m 644 -o ubuntu -g ubuntu "$JAR" /home/ubuntu/linker.jar
+          sudo systemctl restart linker.service

@@ -1,0 +1,80 @@
+name: Verify OCI VM deployment
+description: Run OCI route smoke tests through Bastion
+
+inputs:
+  deployment-private-key:
+    required: true
+  deployment-public-key:
+    required: true
+  oci-cli-user:
+    required: true
+  oci-cli-tenancy:
+    required: true
+  oci-cli-fingerprint:
+    required: true
+  oci-cli-key-content:
+    required: true
+  oci-cli-region:
+    required: true
+  oci-bastion-ocid:
+    required: true
+  oci-instance-ocid:
+    required: true
+  artifact-name:
+    required: true
+  target-path:
+    required: true
+  target-os-username:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify OCI VM routes
+      uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+      env:
+        DEPLOYMENT_PRIVATE_KEY: ${{ inputs.deployment-private-key }}
+        DEPLOYMENT_PUBLIC_KEY: ${{ inputs.deployment-public-key }}
+        OCI_CLI_USER: ${{ inputs.oci-cli-user }}
+        OCI_CLI_TENANCY: ${{ inputs.oci-cli-tenancy }}
+        OCI_CLI_FINGERPRINT: ${{ inputs.oci-cli-fingerprint }}
+        OCI_CLI_KEY_CONTENT: ${{ inputs.oci-cli-key-content }}
+        OCI_CLI_REGION: ${{ inputs.oci-cli-region }}
+        OCI_BASTION_OCID: ${{ inputs.oci-bastion-ocid }}
+        OCI_INSTANCE_OCID: ${{ inputs.oci-instance-ocid }}
+      with:
+        instance-id: ${{ inputs.oci-instance-ocid }}
+        artifact-name: ${{ inputs.artifact-name }}
+        target-path: ${{ inputs.target-path }}
+        target-os-username: ${{ inputs.target-os-username }}
+        oci-cli-cache-version: v1
+        script: |
+          set -euo pipefail
+
+          echo "Waiting for the app to become healthy..."
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+              echo "OCI app is healthy"
+              break
+            fi
+            sleep 3
+          done
+
+          if ! curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+            echo "OCI healthcheck failed"
+            sudo systemctl status linker.service --no-pager || true
+            sudo journalctl -u linker.service -n 60 --no-pager || true
+            exit 1
+          fi
+
+          CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link -H 'Content-Type: application/json' -d '{"url":"https://www.google.com"}')"
+          SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          LOCATION="$(curl -s -o /dev/null -D - "http://127.0.0.1:8080/${SHORT_ID}" | grep -i '^location:' | tr -d '\r')"
+          HEAD_STATUS="$(curl -s -o /dev/null -I -w '%{http_code}' "http://127.0.0.1:8080/${SHORT_ID}")"
+          DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "http://127.0.0.1:8080/${SHORT_ID}")"
+          STATUS="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)"
+
+          test "$LOCATION" = 'Location: https://www.google.com'
+          test "$HEAD_STATUS" = '200'
+          test "$DELETE_STATUS" = '204'
+          test "$STATUS" = '404'

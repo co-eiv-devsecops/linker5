@@ -1,0 +1,71 @@
+name: Verify OCI VM observability configuration and traffic
+description: Validate OCI OTEL runtime settings and emit synthetic traffic
+
+inputs:
+  deployment-private-key:
+    required: true
+  deployment-public-key:
+    required: true
+  oci-cli-user:
+    required: true
+  oci-cli-tenancy:
+    required: true
+  oci-cli-fingerprint:
+    required: true
+  oci-cli-key-content:
+    required: true
+  oci-cli-region:
+    required: true
+  oci-bastion-ocid:
+    required: true
+  oci-instance-ocid:
+    required: true
+  artifact-name:
+    required: true
+  target-path:
+    required: true
+  target-os-username:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify OCI VM OTEL settings and emit synthetic traffic
+      uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+      env:
+        DEPLOYMENT_PRIVATE_KEY: ${{ inputs.deployment-private-key }}
+        DEPLOYMENT_PUBLIC_KEY: ${{ inputs.deployment-public-key }}
+        OCI_CLI_USER: ${{ inputs.oci-cli-user }}
+        OCI_CLI_TENANCY: ${{ inputs.oci-cli-tenancy }}
+        OCI_CLI_FINGERPRINT: ${{ inputs.oci-cli-fingerprint }}
+        OCI_CLI_KEY_CONTENT: ${{ inputs.oci-cli-key-content }}
+        OCI_CLI_REGION: ${{ inputs.oci-cli-region }}
+        OCI_BASTION_OCID: ${{ inputs.oci-bastion-ocid }}
+        OCI_INSTANCE_OCID: ${{ inputs.oci-instance-ocid }}
+      with:
+        instance-id: ${{ inputs.oci-instance-ocid }}
+        artifact-name: ${{ inputs.artifact-name }}
+        target-path: ${{ inputs.target-path }}
+        target-os-username: ${{ inputs.target-os-username }}
+        oci-cli-cache-version: v1
+        script: |
+          set -euo pipefail
+
+          SERVICE_ENV="$(sudo systemctl show linker.service --property=Environment --value)"
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_SERVICE_NAME=linker5-java'
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_RESOURCE_ATTRIBUTES=deployment.environment=oci,cloud.provider=oracle'
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces'
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics'
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs'
+          printf '%s\n' "$SERVICE_ENV" | grep -q 'LINKER_OTEL_LOG_EXPORT=true'
+
+          for i in $(seq 1 5); do
+            curl -fsS http://127.0.0.1:8080/healthz >/dev/null
+            CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link -H 'Content-Type: application/json' -d '{"url":"https://www.google.com"}')"
+            SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+            curl -fsSI "http://127.0.0.1:8080/${SHORT_ID}" >/dev/null
+            curl -fsS -X DELETE "http://127.0.0.1:8080/${SHORT_ID}" >/dev/null
+            curl -fsS http://127.0.0.1:8080/does-not-exist >/dev/null 2>&1 || true
+          done
+
+          echo 'OCI synthetic observability traffic generated successfully.'

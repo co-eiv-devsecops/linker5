@@ -1,0 +1,54 @@
+name: Verify Azure Functions deployment
+description: Wait for Azure health and run route smoke tests
+
+inputs:
+  base-url:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for Azure Function app health
+      shell: bash
+      run: |
+        set -euo pipefail
+        BASE_URL="${{ inputs.base-url }}"
+        for i in $(seq 1 30); do
+          if curl -fsS "${BASE_URL}/healthz" >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 10
+        done
+        exit 1
+
+    - name: Verify Azure Function routes
+      shell: bash
+      run: |
+        set -euo pipefail
+        BASE_URL="${{ inputs.base-url }}"
+
+        ROOT_CONTENT_TYPE="$(curl -s -o /tmp/linker-root.html -D - "${BASE_URL}/" | grep -i '^content-type:' | tr -d '\r')"
+        echo "$ROOT_CONTENT_TYPE" | grep -qi 'text/html'
+        grep -q '<title>Linker</title>' /tmp/linker-root.html
+
+        CSS_CONTENT_TYPE="$(curl -s -o /tmp/linker-style.css -D - "${BASE_URL}/css/style.css" | grep -i '^content-type:' | tr -d '\r')"
+        echo "$CSS_CONTENT_TYPE" | grep -qi 'text/css'
+
+        JS_CONTENT_TYPE="$(curl -s -o /tmp/linker-app.js -D - "${BASE_URL}/js/app.js" | grep -i '^content-type:' | tr -d '\r')"
+        echo "$JS_CONTENT_TYPE" | grep -qi 'application/javascript'
+
+        CREATE_RESPONSE="$(curl -fsS -X POST "${BASE_URL}/link" -H "Content-Type: application/json" -d '{"url":"https://www.google.com"}')"
+        SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
+        [ -n "$SHORT_ID" ] && [ "$SHORT_ID" != "null" ]
+
+        LOCATION="$(curl -s -o /dev/null -D - "${BASE_URL}/${SHORT_ID}" | grep -i '^location:' | tr -d '\r')"
+        echo "$LOCATION" | grep -q "https://www.google.com"
+
+        HEAD_STATUS="$(curl -s -o /dev/null -I -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
+        [ "$HEAD_STATUS" = "200" ]
+
+        DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
+        [ "$DELETE_STATUS" = "204" ]
+
+        STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/does-not-exist")"
+        [ "$STATUS" = "404" ]

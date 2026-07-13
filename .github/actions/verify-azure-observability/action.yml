@@ -1,0 +1,56 @@
+name: Verify Azure Functions observability configuration and traffic
+description: Log into Azure, validate OTEL settings, and emit synthetic traffic
+
+inputs:
+  client-id:
+    required: true
+  tenant-id:
+    required: true
+  subscription-id:
+    required: true
+  function-app-name:
+    required: true
+  resource-group:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Verify Azure Function OTEL settings
+      shell: bash
+      run: |
+        set -euo pipefail
+        SETTINGS_JSON="$(az functionapp config appsettings list --name "${{ inputs.function-app-name }}" --resource-group "${{ inputs.resource-group }}" --output json)"
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_SERVICE_NAME" and .value == "linker5-java")' >/dev/null
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_RESOURCE_ATTRIBUTES" and .value == "deployment.environment=azure,cloud.provider=azure")' >/dev/null
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces")' >/dev/null
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics")' >/dev/null
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT" and .value == "https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs")' >/dev/null
+        printf '%s' "$SETTINGS_JSON" | jq -e '.[] | select(.name == "LINKER_OTEL_LOG_EXPORT" and .value == "true")' >/dev/null
+
+    - name: Emit Azure synthetic observability traffic
+      shell: bash
+      run: |
+        set -euo pipefail
+        BASE_URL="https://${{ inputs.function-app-name }}.azurewebsites.net"
+
+        for i in $(seq 1 5); do
+          curl -fsS "${BASE_URL}/healthz" >/dev/null
+          CREATE_RESPONSE="$(curl -fsS -X POST "${BASE_URL}/link" -H "Content-Type: application/json" -d '{"url":"https://www.google.com"}')"
+          SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
+          [ -n "$SHORT_ID" ] && [ "$SHORT_ID" != "null" ]
+          curl -fsSI "${BASE_URL}/${SHORT_ID}" >/dev/null
+          DELETE_STATUS="$(curl -s -o /dev/null -X DELETE -w '%{http_code}' "${BASE_URL}/${SHORT_ID}")"
+          [ "$DELETE_STATUS" = "204" ]
+          STATUS="$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/does-not-exist")"
+          [ "$STATUS" = "404" ]
+        done
+
+        echo 'Azure synthetic observability traffic generated successfully.'

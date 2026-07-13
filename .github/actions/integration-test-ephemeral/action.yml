@@ -1,0 +1,75 @@
+name: Integration Tests (Ephemeral Environment)
+description: Build, run, verify, and tear down Linker against ephemeral MySQL
+
+runs:
+  using: composite
+  steps:
+    - name: Build jar
+      shell: bash
+      run: mvn -B -f linker5-java/pom.xml package -DskipTests
+
+    - name: Start Linker against the ephemeral MySQL
+      shell: bash
+      run: |
+        set -euo pipefail
+        JAR="$(find linker5-java/target -name '*-jar-with-dependencies.jar' | head -n1)"
+        nohup java -jar "$JAR" > linker.log 2>&1 &
+        echo $! > linker.pid
+
+    - name: Wait for the app to become healthy
+      shell: bash
+      run: |
+        set -euo pipefail
+        for i in $(seq 1 20); do
+          if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+            echo "App is healthy"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "App did not become healthy in time"
+        cat linker.log || true
+        exit 1
+
+    - name: Functional and integration tests
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        echo "Creating a short link..."
+        CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link \
+          -H "Content-Type: application/json" \
+          -d '{"url":"https://www.google.com"}')"
+        echo "Response: $CREATE_RESPONSE"
+
+        SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
+        if [ -z "$SHORT_ID" ] || [ "$SHORT_ID" = "null" ]; then
+          echo "No id returned in create response"
+          exit 1
+        fi
+
+        echo "Following redirect for id=$SHORT_ID..."
+        LOCATION="$(curl -s -o /dev/null -D - http://127.0.0.1:8080/$SHORT_ID | grep -i '^location:' | tr -d '\r')"
+        echo "$LOCATION" | grep -q "https://www.google.com"
+
+        echo "Requesting an unknown id returns 404..."
+        STATUS="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)"
+        [ "$STATUS" = "404" ]
+
+        echo "Posting an invalid payload returns 400..."
+        STATUS="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/link \
+          -H "Content-Type: application/json" \
+          -d '{}')"
+        [ "$STATUS" = "400" ]
+
+        echo "All integration checks passed"
+
+    - name: Dump app logs
+      if: ${{ failure() }}
+      shell: bash
+      run: cat linker.log || true
+
+    - name: Stop the app
+      if: ${{ always() }}
+      shell: bash
+      run: kill "$(cat linker.pid)" 2>/dev/null || true
