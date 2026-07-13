@@ -1,6 +1,6 @@
 # Despliegue y redespliegue de Linker
 
-> 🧭 **Guía de lectura — Paso 2 de 5** · [Índice](http://5.n-la-c.app/a8f7ea12) · [← API](http://5.n-la-c.app/1de3bdd1) · [Siguiente: Lanzamientos →](http://5.n-la-c.app/d1d4c892)
+> 🧭 **Guía de lectura — Paso 2 de 5** · [Índice](https://5.n-la-c.app/a8f7ea12) · [← API](https://5.n-la-c.app/1de3bdd1) · [Siguiente: Lanzamientos →](https://5.n-la-c.app/d1d4c892)
 
 Este documento describe cómo se (re)despliega Linker: el pipeline de CI/CD
 con su entorno efímero de pruebas, y el procedimiento de despliegue
@@ -8,11 +8,11 @@ con su entorno efímero de pruebas, y el procedimiento de despliegue
 
 Regla de oro: **todo despliegue pasa por GitHub Actions**. No se hacen
 operaciones manuales en la consola de OCI (ver
-[OPERACIONES.md](http://5.n-la-c.app/f8b20235)).
+[OPERACIONES.md](https://5.n-la-c.app/f8b20235)).
 
 ## Pipeline CI/CD (`ci-cd-pipeline.yml`)
 
-Workflow: [`.github/workflows/ci-cd-pipeline.yml`](http://5.n-la-c.app/2a547e35)
+Workflow: [`.github/workflows/ci-cd-pipeline.yml`](https://5.n-la-c.app/2a547e35)
 
 Se dispara en cada `push`/`pull_request` a `main` (y manualmente con
 `workflow_dispatch`). El mismo pipeline despliega a **dos objetivos de PROD**:
@@ -30,7 +30,7 @@ build ──> test ──> integration-test (entorno efímero) ──┬──> 
 | **test** | Corre las pruebas unitarias (`mvn test`). |
 | **integration-test** | Levanta un **entorno efímero**: un MySQL 8 como service container + la app real desde el jar, y ejecuta pruebas de integración y funcionalidad contra HTTP de verdad. El entorno vive solo durante el job y se destruye al terminar. |
 | **package** | Publica el jar en GitHub Packages y lo sube como artefacto `linker-app`. |
-| **deploy-prod** | Solo en `push` a `main` y con el environment `production`. Despliega el jar a la VM de OCI a través del **Bastion** (acción `oci-bastion-deploy`), instala/actualiza la unidad `linker.service` de systemd con la configuración (MySQL, OTel/Grafana) desde secretos, reinicia el servicio y hace **healthcheck** con reintentos. Si el healthcheck falla, el job falla y quedan los logs de `journalctl` en la salida. |
+| **deploy-prod** | Solo en `push` a `main` y con el environment `production`. Despliega el jar a la VM de OCI a través del **Bastion** (acción `oci-bastion-deploy`), instala/actualiza la unidad `linker.service` de systemd con la configuración (MySQL, OTel/Grafana) desde secretos, reinicia el servicio y hace **healthchecks** con reintentos. Si el healthcheck falla, el job falla y quedan los logs de `journalctl` en la salida. |
 | **package-azure** | Empaqueta el objetivo serverless con `azure-functions:package` y lo sube como artefacto `linker-azure-function`. |
 | **deploy-azure** | Login OIDC a Azure, sincroniza los app settings (`AZURE_MYSQL_*`, `FEATURE_REDIRECTS_ENABLED`) y despliega el paquete a la Function App con `Azure/functions-action`. |
 | **verify-azure** | Espera a que `https://<function-app>.azurewebsites.net/healthz` responda y verifica las rutas de la Function desplegada. |
@@ -54,13 +54,13 @@ datos real, sin dejar infraestructura viva ni costos residuales.
 
 ## Despliegue Blue-Green 🔵 🟢
 
-Workflow: [`.github/workflows/blue-green-deploy.yml`](../.github/workflows/blue-green-deploy.yml)
+Workflow: [`.github/workflows/blue-green-deploy.yml`](https://5.n-la-c.app/8097a615)
 (se dispara manualmente: Actions → *Blue-Green Deploy* → *Run workflow*).
 Documentación detallada de la infraestructura en
-[`infra/bluegreen/README.md`](../infra/bluegreen/README.md).
+[`infra/bluegreen/README.md`](https://5.n-la-c.app/adf46677).
 
 La idea: la VM **blue** (apuntada por la variable `OCI_INSTANCE_OCID`) sirve
-tráfico detrás de un **Load Balancer de OCI**. Se crea una VM **green** nueva,
+tráfico detrás de un **OCI Load Balancer**. Se crea una VM **green** nueva,
 se prueba a fondo, y solo entonces el LB conmuta el tráfico. Si algo falla,
 green se destruye y blue nunca se tocó.
 
@@ -97,26 +97,26 @@ green se destruye y blue nunca se tocó.
 
 1. **Build**: se compila el jar y se publica como artefacto.
 2. **Crear la instancia nueva** (`launch-green`): se lanza la VM green con
-   [`scripts/bluegreen/launch-green.sh`](../scripts/bluegreen/launch-green.sh),
+   [`scripts/bluegreen/launch-green.sh`](https://5.n-la-c.app/48a27140),
    clonando compartment, AD, shape, subnet e imagen de la blue actual, con
-   [`cloud-init-green.yaml`](../infra/bluegreen/cloud-init-green.yaml) para el
+   [`cloud-init-green.yaml`](https://5.n-la-c.app/28ef5f6d) para el
    aprovisionamiento (Java). Se espera a que el plugin de Bastion esté RUNNING.
 3. **Healthcheck y pruebas de funcionalidad** (`deploy-green`): vía Bastion se
    instala la misma unidad systemd de producción (MySQL + OTel/Grafana), se
    arranca la app y se valida: healthcheck en `:8080` con reintentos, creación
    de un short link (`POST /link`) y verificación del redirect (`GET /<id>`).
 4. **Switchover** (`switchover`): el tráfico se conmuta en el **Load Balancer**
-   con [`scripts/bluegreen/switch-lb-backend.sh`](../scripts/bluegreen/switch-lb-backend.sh):
+   con [`scripts/bluegreen/switch-lb-backend.sh`](https://5.n-la-c.app/be5cb2a8):
    registra el backend green en el backend set, espera a que el LB lo reporte
    sano y remueve el backend blue. Después actualiza el puntero de despliegue
    (`OCI_INSTANCE_OCID`) para que el pipeline CD apunte a green.
 5. **Retiro de la versión anterior**: con `retire_blue = true`, la VM blue se
-   elimina con [`scripts/bluegreen/terminate-instance.sh`](../scripts/bluegreen/terminate-instance.sh).
+   elimina con [`scripts/bluegreen/terminate-instance.sh`](https://5.n-la-c.app/93bf6fa7).
    Por defecto queda viva (estabilidad primero) y se retira después.
 6. **Rollback automático** (`rollback`): si cualquier paso falla, se **elimina
    la VM green** — blue nunca dejó de servir tráfico.
 
-El LB y su backend set se leen de [`infra/linker.env`](../infra/linker.env)
+El LB y su backend set se leen de [`infra/linker.env`](https://5.n-la-c.app/0103a3ee)
 (`OCI_LB_OCID`, `OCI_LB_LINKER_BACKEND`), versionados en el repo: cero
 configuración manual en la consola.
 
@@ -126,9 +126,9 @@ Además de la VM de OCI, **el mismo pipeline** despliega Linker como Function
 App en Azure (jobs `package-azure` → `deploy-azure` → `verify-azure`, ver
 tabla anterior). Ambos objetivos se generan del mismo código: el core es
 compartido y solo cambia el adaptador de entrada (ver
-[LANZAMIENTOS.md](LANZAMIENTOS.md#abstracción-del-core-serverless-en-azure-functions-bono)).
+[LANZAMIENTOS.md](https://5.n-la-c.app/f731a37a)).
 
-- **Aprovisionamiento**: [`scripts/provision-azure.sh`](../scripts/provision-azure.sh)
+- **Provisioning**: [`scripts/provision-azure.sh`](https://5.n-la-c.app/f14a8f76)
   crea el resource group, la storage account, la Function App, el MySQL
   Flexible Server y el service principal para GitHub Actions — todo por CLI,
   nada en el portal.
@@ -141,13 +141,13 @@ compartido y solo cambia el adaptador de entrada (ver
 
 La Function expone exactamente la misma API que la VM (`POST /link`,
 `GET /<id>`, `HEAD /<id>`, `DELETE /<id>`, `/healthz` y la UI estática), ver
-[API.md](API.md). Secretos y variables requeridos están listados en el
-[README raíz](../README.md#github-actions-secrets-and-variables).
+[API.md](https://5.n-la-c.app/f34ad579). Secretos y variables requeridos están listados en
+[VARIABLES.md](https://5.n-la-c.app/071cafea).
 
 ### Después del despliegue
 
 Todo despliegue (normal o Blue-Green) termina con la verificación en Grafana
-descrita en [MONITOREO.md](MONITOREO.md): revisar el dashboard de la app
+descrita en [MONITOREO.md](https://5.n-la-c.app/a3f6b902): revisar el dashboard de la app
 durante los primeros minutos y confirmar tasa de errores y latencia normales.
 
 ## Redespliegue
@@ -166,4 +166,4 @@ healthchecks y estado del servicio.
 
 ---
 
-**Siguiente en la guía →** [Paso 3: Lanzamientos](http://5.n-la-c.app/d1d4c892)
+**Siguiente en la guía →** [Paso 3: Lanzamientos](https://5.n-la-c.app/d1d4c892)

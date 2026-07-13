@@ -66,4 +66,4 @@ Para acoso, agresión o patrones claros de conducta dañina.
 
 ## Fuente
 
-Este documento está basado en [Contributor Covenant](http://5.n-la-c.app/f34dca49), versión 2.1, adaptado al tono y necesidades de este equipo.
+Este documento está basado en [Contributor Covenant](https://5.n-la-c.app/f34dca49), versión 2.1, adaptado al tono y necesidades de este equipo.

@@ -1,52 +1,53 @@
-# Linker — Coded Development Environment (DevContainer)
+# Linker — Entorno de desarrollo como código (Dev Container)
 
-A reproducible development environment defined as code. Anyone can open this repo
-and get the exact same toolchain (JDK 21 + Maven + Git + Java editor tooling)
-without installing anything locally. This solves "works on my machine": the dev
-environment is identical for the whole team.
+Un entorno de desarrollo reproducible definido como código. Cualquier persona
+puede abrir este repo y obtener exactamente la misma toolchain (JDK 21 + Maven)
++ Git + herramientas de edición para Java) sin instalar nada en su máquina.
+Esto resuelve el clásico "en mi máquina funciona": el entorno de desarrollo es
+idéntico para todo el equipo.
 
-> This is the **development** environment (where you write/build the code).
-> It is separate from the Terraform VM under `infra/terraform`, which is the
-> **runtime** environment (where the app is deployed).
+> Este es el entorno de **desarrollo** (donde escribís y compilás el código).
+> Está separado de la VM de Terraform bajo `infra/terraform`, que es el entorno
+> de **runtime** (donde se despliega la aplicación).
 
-## What it provides
+## Qué incluye
 
-- Java 21 (Temurin) and Maven 3.9.9
+- Java 21 (Temurin) y Maven 3.9.9
 - Git
-- VS Code Java extensions preinstalled inside the container
-- Port 8080 auto-forwarded (Linker's port)
-- The jar is built automatically on first create (`postCreateCommand`)
+- Extensiones de Java para VS Code preinstaladas dentro del contenedor
+- Puerto 8080 reenviado automáticamente (el puerto de Linker)
+- El jar se compila automáticamente en la primera creación (`postCreateCommand`)
 
-## Option A — GitHub Codespaces (zero local dependencies, recommended)
+## Opción A — GitHub Codespaces (cero dependencias locales, recomendada)
 
-Best fit for "usable without depending on a computer/VM":
+Es la mejor opción para que sea "usable sin depender de una computadora o VM propia":
 
-1. On the GitHub repo page, click **Code → Codespaces → Create codespace on main**.
-2. Wait for it to build (first time only).
-3. In the terminal, run the app:
+1. En la página del repo en GitHub, hacé clic en **Code → Codespaces → Create codespace on main**.
+2. Esperá a que termine de construirse (solo la primera vez).
+3. En la terminal, ejecutá la app:
    ```bash
    cd linker5-java
    java -jar target/*-jar-with-dependencies.jar
    ```
-4. Open the forwarded port 8080 (Codespaces shows a popup / the Ports tab).
+4. Abrí el puerto 8080 reenviado (Codespaces muestra un popup o la pestaña Ports).
 
-## Option B — VS Code locally (requires Docker + Dev Containers extension)
+## Opción B — VS Code local (requiere Docker + extensión Dev Containers)
 
-1. Install [Docker](http://5.n-la-c.app/13e70bb5) and the VS Code
-   **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
-2. Open this repo in VS Code.
-3. Command Palette → **Dev Containers: Reopen in Container**.
-4. Once built, run the app as in Option A step 3.
+1. Instalá [Docker](https://5.n-la-c.app/13e70bb5) y la extensión de VS Code
+   **Dev Containers** (`ms-vscode-remote.remote-containers`).
+2. Abrí este repo en VS Code.
+3. Paleta de comandos → **Dev Containers: Reopen in Container**.
+4. Una vez construido, ejecutá la app como en el paso 3 de la Opción A.
 
-## Rebuild / run inside the container
+## Reconstruir / ejecutar dentro del contenedor
 
 ```bash
 cd linker5-java
-mvn clean package -DskipTests           # build
-java -jar target/*-jar-with-dependencies.jar   # run on :8080
+mvn clean package -DskipTests           # compilar
+java -jar target/*-jar-with-dependencies.jar   # ejecutar en :8080
 ```
 
-Then test:
+Después, probá:
 
 ```bash
 curl -X POST http://localhost:8080/link \
