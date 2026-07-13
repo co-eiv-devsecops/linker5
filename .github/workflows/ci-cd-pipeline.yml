@@ -100,69 +100,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build jar
-        run: mvn -B -f linker5-java/pom.xml package -DskipTests
-
-      - name: Start Linker against the ephemeral MySQL
-        run: |
-          set -euo pipefail
-          JAR="$(find linker5-java/target -name '*-jar-with-dependencies.jar' | head -n1)"
-          nohup java -jar "$JAR" > linker.log 2>&1 &
-          echo $! > linker.pid
-
-      - name: Wait for the app to become healthy
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
-              echo "App is healthy"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "App did not become healthy in time"
-          cat linker.log || true
-          exit 1
-
-      - name: Functional and integration tests
-        run: |
-          set -euo pipefail
-
-          echo "Creating a short link..."
-          CREATE_RESPONSE="$(curl -fsS -X POST http://127.0.0.1:8080/link \
-            -H "Content-Type: application/json" \
-            -d '{"url":"https://www.google.com"}')"
-          echo "Response: $CREATE_RESPONSE"
-
-          SHORT_ID="$(printf '%s' "$CREATE_RESPONSE" | jq -r '.id')"
-          if [ -z "$SHORT_ID" ] || [ "$SHORT_ID" = "null" ]; then
-            echo "No id returned in create response"
-            exit 1
-          fi
-
-          echo "Following redirect for id=$SHORT_ID..."
-          LOCATION="$(curl -s -o /dev/null -D - http://127.0.0.1:8080/$SHORT_ID | grep -i '^location:' | tr -d '\r')"
-          echo "$LOCATION" | grep -q "https://www.google.com"
-
-          echo "Requesting an unknown id returns 404..."
-          STATUS="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)"
-          [ "$STATUS" = "404" ]
-
-          echo "Posting an invalid payload returns 400..."
-          STATUS="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/link \
-            -H "Content-Type: application/json" \
-            -d '{}')"
-          [ "$STATUS" = "400" ]
-
-          echo "All integration checks passed"
-
-      - name: Dump app logs
-        if: failure()
-        run: cat linker.log || true
-
-      - name: Stop the app
-        if: always()
-        run: kill "$(cat linker.pid)" 2>/dev/null || true
+      - name: Run ephemeral environment integration flow
+        uses: ./.github/actions/integration-test-ephemeral
 
   package-oci:
     name: Package OCI VM artifact
@@ -206,11 +145,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, integration-test]
 
-    env:
-      AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      AZURE_REGION: ${{ vars.AZURE_REGION || 'mexicocentral' }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -223,23 +157,11 @@ jobs:
           cache: maven
 
       - name: Package Azure Functions artifact
-        run: >-
-          mvn -B -f linker5-java/pom.xml -DskipTests package
-          -Dazure.functions.appName="${AZURE_FUNCTION_APP_NAME}"
-          -Dazure.functions.resourceGroup="${AZURE_RESOURCE_GROUP}"
-          -Dazure.functions.region="${AZURE_REGION}"
-          azure-functions:package
-
-      - name: Verify Azure package output exists
-        run: |
-          set -euo pipefail
-          OUTPUT_DIR="linker5-java/target/azure-functions/${AZURE_FUNCTION_APP_NAME}"
-          if [ ! -d "$OUTPUT_DIR" ]; then
-            echo "Azure Functions package directory was not generated: $OUTPUT_DIR"
-            find linker5-java/target -maxdepth 3 -type d | sort || true
-            exit 1
-          fi
-          test -f "$OUTPUT_DIR/host.json"
+        uses: ./.github/actions/package-azure
+        with:
+          azure-function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          azure-resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure-region: ${{ vars.AZURE_REGION || 'mexicocentral' }}
 
       - name: Upload Azure Functions package
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -258,142 +180,42 @@ jobs:
     environment:
       name: production
 
-    env:
-      DEPLOYMENT_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
-      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
-      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
-      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
-      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
-      DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
-      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
-      OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
-      OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
-      OTEL_SERVICE_NAME: linker5-java
-      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=oci,cloud.provider=oracle
-      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
-      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
-      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-      MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
-      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-      MYSQL_USER: ${{ secrets.MYSQL_USER }}
-      MYSQL_PWD: ${{ secrets.MYSQL_PWD }}
-
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Deploy to OCI VM
-        uses: co-eiv-devsecops/material-curso/actions/oci-bastion-deploy@main
+        uses: ./.github/actions/deploy-oci
         with:
-          ssh-public-key: ${{ env.DEPLOYMENT_PUBLIC_KEY }}
-          bastion-id: ${{ vars.OCI_BASTION_OCID }}
-          instance-id: ${{ env.OCI_INSTANCE_OCID }}
+          deployment-private-key: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
+          deployment-public-key: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
+          oci-cli-user: ${{ secrets.OCI_CLI_USER }}
+          oci-cli-tenancy: ${{ secrets.OCI_CLI_TENANCY }}
+          oci-cli-fingerprint: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          oci-cli-key-content: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          oci-cli-region: ${{ vars.OCI_CLI_REGION }}
+          oci-bastion-ocid: ${{ vars.OCI_BASTION_OCID }}
+          oci-instance-ocid: ${{ vars.OCI_INSTANCE_OCID }}
+          otel-service-name: linker5-java
+          otel-resource-attributes: deployment.environment=oci,cloud.provider=oracle
+          otel-exporter-otlp-protocol: http/protobuf
+          otel-exporter-otlp-traces-endpoint: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+          otel-exporter-otlp-metrics-endpoint: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+          otel-exporter-otlp-logs-endpoint: https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+          otel-exporter-otlp-headers: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          mysql-host: ${{ secrets.MYSQL_HOST }}
+          mysql-database: ${{ secrets.MYSQL_DATABASE }}
+          mysql-user: ${{ secrets.MYSQL_USER }}
+          mysql-pwd: ${{ secrets.MYSQL_PWD }}
           artifact-name: linker-oci-vm-artifact
           target-path: /tmp/deploy/linker/${{ github.sha }}
           target-os-username: ubuntu
-          oci-cli-cache-version: v1
-          script: |
-            set -euo pipefail
-
-            DEPLOY_DIR="/tmp/deploy/linker/${{ github.sha }}"
-            JAR="$(find "$DEPLOY_DIR" -name '*-jar-with-dependencies.jar' | head -n1)"
-
-            if [ -z "$JAR" ] || [ ! -f "$JAR" ]; then
-              echo "No deployable jar found under $DEPLOY_DIR"
-              ls -la "$DEPLOY_DIR" || true
-              exit 1
-            fi
-            echo "Deploying artifact: $JAR"
-
-            OTEL_EXPORTER_OTLP_HEADERS_VALUE=$(cat <<'EOF'
-            ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-            EOF
-            )
-            MYSQL_HOST_VALUE=$(cat <<'EOF'
-            ${{ secrets.MYSQL_HOST }}
-            EOF
-            )
-            MYSQL_DATABASE_VALUE=$(cat <<'EOF'
-            ${{ secrets.MYSQL_DATABASE }}
-            EOF
-            )
-            MYSQL_USER_VALUE=$(cat <<'EOF'
-            ${{ secrets.MYSQL_USER }}
-            EOF
-            )
-            MYSQL_PWD_VALUE=$(cat <<'EOF'
-            ${{ secrets.MYSQL_PWD }}
-            EOF
-            )
-
-            escape_systemd_value() {
-              printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-            }
-
-            OTEL_EXPORTER_OTLP_HEADERS_ESCAPED="$(escape_systemd_value "$OTEL_EXPORTER_OTLP_HEADERS_VALUE")"
-            MYSQL_HOST_ESCAPED="$(escape_systemd_value "$MYSQL_HOST_VALUE")"
-            MYSQL_DATABASE_ESCAPED="$(escape_systemd_value "$MYSQL_DATABASE_VALUE")"
-            MYSQL_USER_ESCAPED="$(escape_systemd_value "$MYSQL_USER_VALUE")"
-            MYSQL_PWD_ESCAPED="$(escape_systemd_value "$MYSQL_PWD_VALUE")"
-
-            # Always (re)install the unit so ExecStart points at the deployed jar.
-            # A pre-existing unit on the VM pointed elsewhere, so the old jar kept running.
-            echo "Installing/updating linker.service unit..."
-            sudo tee /etc/systemd/system/linker.service > /dev/null <<UNIT
-            [Unit]
-            Description=Linker URL Shortener
-            After=network-online.target
-            Wants=network-online.target
-
-            [Service]
-            Type=simple
-            User=ubuntu
-            WorkingDirectory=/home/ubuntu
-            Environment=PORT=8080
-            Environment=LINKER_LOG_LEVEL=INFO
-            Environment=LINKER_OTEL_LOG_EXPORT=true
-            Environment=FEATURE_REDIRECTS_ENABLED=true
-            Environment=OTEL_SERVICE_NAME=linker5-java
-            Environment=OTEL_RESOURCE_ATTRIBUTES=deployment.environment=oci,cloud.provider=oracle
-            Environment=OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-            Environment=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
-            Environment=OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
-            Environment=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
-            Environment="OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS_ESCAPED}"
-            Environment="MYSQL_HOST=${MYSQL_HOST_ESCAPED}"
-            Environment="MYSQL_DATABASE=${MYSQL_DATABASE_ESCAPED}"
-            Environment="MYSQL_USER=${MYSQL_USER_ESCAPED}"
-            Environment="MYSQL_PWD=${MYSQL_PWD_ESCAPED}"
-            ExecStart=/usr/bin/java -jar /home/ubuntu/linker.jar
-            Restart=always
-            RestartSec=5
-
-            [Install]
-            WantedBy=multi-user.target
-            UNIT
-            sudo systemctl daemon-reload
-            sudo systemctl enable linker.service
-
-            # Publish the new jar to the stable path the service runs from
-            sudo systemctl stop linker.service || true
-            sudo install -m 644 -o ubuntu -g ubuntu "$JAR" /home/ubuntu/linker.jar
-            sudo systemctl restart linker.service
 
   verify-oci:
     name: Verify OCI VM deployment
     runs-on: ubuntu-latest
     needs: deploy-oci
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-
-    env:
-      DEPLOYMENT_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
-      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
-      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
-      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
-      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
-      DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
-      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
-      OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
-      OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
 
     steps:
       - name: Checkout repository
@@ -424,71 +246,31 @@ jobs:
     environment:
       name: production
 
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      AZURE_REGION: ${{ vars.AZURE_REGION || 'mexicocentral' }}
-      AZURE_MYSQL_HOST: ${{ secrets.AZURE_MYSQL_HOST }}
-      AZURE_MYSQL_DATABASE: ${{ secrets.AZURE_MYSQL_DATABASE }}
-      AZURE_MYSQL_USER: ${{ secrets.AZURE_MYSQL_USER }}
-      AZURE_MYSQL_PWD: ${{ secrets.AZURE_MYSQL_PWD }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download Azure Functions package
-        uses: actions/download-artifact@v5
-        with:
-          name: linker-azure-functions-artifact
-          path: linker5-java/target/azure-functions/${{ vars.AZURE_FUNCTION_APP_NAME }}
-
-      - name: Azure login
-        uses: azure/login@v2
+      - name: Deploy Azure Function package
+        uses: ./.github/actions/deploy-azure
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sync Azure Function app settings
-        run: >-
-          az functionapp config appsettings set
-          --name "${AZURE_FUNCTION_APP_NAME}"
-          --resource-group "${AZURE_RESOURCE_GROUP}"
-          --settings
-          AZURE_MYSQL_HOST="${AZURE_MYSQL_HOST}"
-          AZURE_MYSQL_DATABASE="${AZURE_MYSQL_DATABASE}"
-          AZURE_MYSQL_USER="${AZURE_MYSQL_USER}"
-          AZURE_MYSQL_PWD="${AZURE_MYSQL_PWD}"
-          FEATURE_REDIRECTS_ENABLED=true
-          LINKER_LOG_LEVEL=INFO
-          LINKER_OTEL_LOG_EXPORT=true
-          OTEL_SERVICE_NAME=linker5-java
-          OTEL_RESOURCE_ATTRIBUTES=deployment.environment=azure,cloud.provider=azure
-          OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
-          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
-          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
-          OTEL_EXPORTER_OTLP_HEADERS="${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}"
-          AzureWebJobsDisableHomepage=true
-
-      - name: Deploy Azure Function package
-        uses: Azure/functions-action@v1
-        with:
-          app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-          package: linker5-java/target/azure-functions/${{ vars.AZURE_FUNCTION_APP_NAME }}
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure-mysql-host: ${{ secrets.AZURE_MYSQL_HOST }}
+          azure-mysql-database: ${{ secrets.AZURE_MYSQL_DATABASE }}
+          azure-mysql-user: ${{ secrets.AZURE_MYSQL_USER }}
+          azure-mysql-pwd: ${{ secrets.AZURE_MYSQL_PWD }}
+          artifact-name: linker-azure-functions-artifact
+          package-path: linker5-java/target/azure-functions/${{ vars.AZURE_FUNCTION_APP_NAME }}
+          otel-exporter-otlp-headers: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
   verify-azure:
     name: Verify Azure Functions deployment
     runs-on: ubuntu-latest
     needs: deploy-azure
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-
-    env:
-      AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
 
     steps:
       - name: Checkout repository
@@ -504,17 +286,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: verify-oci
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pipeline-observability-validation') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-
-    env:
-      DEPLOYMENT_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_PRIVATE_KEY }}
-      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
-      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
-      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
-      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
-      DEPLOYMENT_PUBLIC_KEY: ${{ secrets.DEPLOYMENT_PUBLIC_KEY }}
-      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
-      OCI_BASTION_OCID: ${{ vars.OCI_BASTION_OCID }}
-      OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
 
     steps:
       - name: Checkout repository
@@ -544,13 +315,6 @@ jobs:
 
     environment:
       name: production
-
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_FUNCTION_APP_NAME: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
 
     steps:
       - name: Checkout repository

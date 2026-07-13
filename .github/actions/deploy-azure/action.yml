@@ -1,0 +1,73 @@
+name: Deploy to Azure Functions
+description: Download, configure, and deploy the Azure Functions artifact
+
+inputs:
+  client-id:
+    required: true
+  tenant-id:
+    required: true
+  subscription-id:
+    required: true
+  function-app-name:
+    required: true
+  resource-group:
+    required: true
+  azure-mysql-host:
+    required: true
+  azure-mysql-database:
+    required: true
+  azure-mysql-user:
+    required: true
+  azure-mysql-pwd:
+    required: true
+  artifact-name:
+    required: true
+  package-path:
+    required: true
+  otel-exporter-otlp-headers:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download Azure Functions package
+      uses: actions/download-artifact@v5
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.package-path }}
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Sync Azure Function app settings
+      shell: bash
+      run: >-
+        az functionapp config appsettings set
+        --name "${{ inputs.function-app-name }}"
+        --resource-group "${{ inputs.resource-group }}"
+        --settings
+        AZURE_MYSQL_HOST="${{ inputs.azure-mysql-host }}"
+        AZURE_MYSQL_DATABASE="${{ inputs.azure-mysql-database }}"
+        AZURE_MYSQL_USER="${{ inputs.azure-mysql-user }}"
+        AZURE_MYSQL_PWD="${{ inputs.azure-mysql-pwd }}"
+        FEATURE_REDIRECTS_ENABLED=true
+        LINKER_LOG_LEVEL=INFO
+        LINKER_OTEL_LOG_EXPORT=true
+        OTEL_SERVICE_NAME=linker5-java
+        OTEL_RESOURCE_ATTRIBUTES=deployment.environment=azure,cloud.provider=azure
+        OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/traces
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/metrics
+        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp-gateway-prod-us-east-3.grafana.net/otlp/v1/logs
+        OTEL_EXPORTER_OTLP_HEADERS="${{ inputs.otel-exporter-otlp-headers }}"
+        AzureWebJobsDisableHomepage=true
+
+    - name: Deploy Azure Function package
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ inputs.function-app-name }}
+        package: ${{ inputs.package-path }}
