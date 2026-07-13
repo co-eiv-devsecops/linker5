@@ -433,7 +433,7 @@ jobs:
             STATUS="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)"
 
             test "$LOCATION" = 'Location: https://www.google.com'
-            test "$HEAD_STATUS" = '302'
+            test "$HEAD_STATUS" = '200'
             test "$DELETE_STATUS" = '204'
             test "$STATUS" = '404'
 
